@@ -1,3 +1,5 @@
+![image](https://github.com/keaukraine/webgl-stylized-castle/assets/414072/264d0e4a-c406-4a05-9709-354069071df5)
+
 # WebGL Stylized Castle demo
 
 Live demo page is available here: https://keaukraine.github.io/webgl-stylized-castle/index.html
