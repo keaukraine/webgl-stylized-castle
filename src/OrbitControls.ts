@@ -32,9 +32,6 @@ export class OrbitControls {
 
     private viewMatrix = mat4.create();
 
-    private yaw: number;
-    private pitch: number;
-    private radius: number;
     private speed: number;
     private zoomSpeed: number;
     private autoRotateSpeed: number;
@@ -44,14 +41,17 @@ export class OrbitControls {
     private maxRadius: number;
     private origin: Float32Array;
 
-    private position = vec3.fromValues(1, 0, 0);
-    private center = vec3.fromValues(0, 0, 0);
+    public radius: number;
+    public position = vec3.fromValues(1, 0, 0);
+    public center = vec3.fromValues(0, 0, 0);
+    public yaw: number;
+    public pitch: number;
 
     private enabled = false;
     private autoRotate = true;
     private autoRotateTimeout: number | undefined;
 
-    constructor(protected renderer: Renderer, options: OrbitConfig) {
+    constructor(protected renderer: Renderer, public readonly options: OrbitConfig) {
         this.yaw = options.yaw;
         this.pitch = options.pitch;
         this.radius = options.radius;

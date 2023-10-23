@@ -1,4 +1,5 @@
 import { Renderer } from "./Renderer";
+import { vec3 } from "gl-matrix";
 export interface OrbitConfig {
     yaw: number;
     pitch: number;
@@ -14,13 +15,11 @@ export interface OrbitConfig {
 }
 export declare class OrbitControls {
     protected renderer: Renderer;
+    readonly options: OrbitConfig;
     private lastX;
     private lastY;
     private state;
     private viewMatrix;
-    private yaw;
-    private pitch;
-    private radius;
     private speed;
     private zoomSpeed;
     private autoRotateSpeed;
@@ -29,8 +28,11 @@ export declare class OrbitControls {
     private minRadius;
     private maxRadius;
     private origin;
-    private position;
-    private center;
+    radius: number;
+    position: vec3;
+    center: vec3;
+    yaw: number;
+    pitch: number;
     private enabled;
     private autoRotate;
     private autoRotateTimeout;

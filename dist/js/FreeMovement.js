@@ -53,6 +53,24 @@ class FreeMovement {
         callback(16);
     }
     ;
+    updatePosition(position) {
+        if (this.fpsCamera) {
+            this.fpsCamera.position[0] = position[0];
+            this.fpsCamera.position[1] = position[1];
+            this.fpsCamera.position[2] = position[2];
+            this.fpsCamera.dirty = true;
+            this.fpsCamera.update(0);
+        }
+    }
+    updateRotation(rotation) {
+        if (this.fpsCamera) {
+            this.fpsCamera.angles[0] = rotation[0];
+            this.fpsCamera.angles[1] = rotation[1];
+            this.fpsCamera.angles[2] = rotation[2];
+            this.fpsCamera.dirty = true;
+            this.fpsCamera.update(0);
+        }
+    }
 }
 exports.FreeMovement = FreeMovement;
 //# sourceMappingURL=FreeMovement.js.map

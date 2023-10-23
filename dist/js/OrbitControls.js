@@ -12,6 +12,7 @@ var OrbitState;
 class OrbitControls {
     constructor(renderer, options) {
         this.renderer = renderer;
+        this.options = options;
         this.lastX = -1;
         this.lastY = -1;
         this.state = OrbitState.NONE;

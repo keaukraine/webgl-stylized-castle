@@ -257,7 +257,15 @@ export class Renderer extends BaseRenderer {
             {
                 canvas: this.canvas!,
                 movementSpeed: 35,
-                rotationSpeed: 0.006
+                rotationSpeed: 0.006,
+                boundingBox: {
+                    minX: -500,
+                    maxX: 500,
+                    minY: -500,
+                    maxY: 500,
+                    minZ: 10,
+                    maxZ: 500
+                }
             }
         );
 
@@ -1024,17 +1032,20 @@ export class Renderer extends BaseRenderer {
     }
 
     public setCameraMode(mode: CameraMode): void {
-        this.cameraMode = mode;
-        if (this.cameraMode === CameraMode.Orbiting) {
+        if (mode === CameraMode.Orbiting) {
             this.orbitControls?.enable();
             this.freeMovement?.disable();
-        } else if (this.cameraMode === CameraMode.FPS) {
+        } else if (mode === CameraMode.FPS) {
+            this.freeMovement?.updatePosition([0, -400, 150]);
+            this.freeMovement?.updateRotation([0.39, 0, 0]);
             this.orbitControls?.disable();
             this.freeMovement?.enable();
         } else {
             this.orbitControls?.disable();
             this.freeMovement?.disable();
         }
+
+        this.cameraMode = mode;
     }
 
     public get currentCameraMode() {

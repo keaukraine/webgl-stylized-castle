@@ -4345,6 +4345,7 @@ var OrbitState;
 class OrbitControls {
     constructor(renderer, options) {
         this.renderer = renderer;
+        this.options = options;
         this.lastX = -1;
         this.lastY = -1;
         this.state = OrbitState.NONE;
@@ -4450,6 +4451,7 @@ class OrbitControls {
 class FpsCamera {
     constructor(options) {
         var _a, _b;
+        this.options = options;
         this._dirty = true;
         this._angles = create();
         this._position = create();
@@ -4459,6 +4461,8 @@ class FpsCamera {
         this._viewMat = create$1();
         this.projectionMat = create$1();
         this.pressedKeys = new Array();
+        this.vec3Temp1 = create();
+        this.vec3Temp2 = create();
         this.canvas = options.canvas;
         this.speed = (_a = options.movementSpeed) !== null && _a !== void 0 ? _a : 100;
         this.rotationSpeed = (_b = options.rotationSpeed) !== null && _b !== void 0 ? _b : 0.025;
@@ -4514,6 +4518,12 @@ class FpsCamera {
         this._position = value;
         this._dirty = true;
     }
+    get dirty() {
+        return this._dirty;
+    }
+    set dirty(value) {
+        this._dirty = value;
+    }
     get viewMat() {
         if (this._dirty) {
             var mv = this._viewMat;
@@ -4527,39 +4537,64 @@ class FpsCamera {
         return this._viewMat;
     }
     update(frameTime) {
-        const dir = create();
+        this.vec3Temp1[0] = 0;
+        this.vec3Temp1[1] = 0;
+        this.vec3Temp1[2] = 0;
         let speed = (this.speed / 1000) * frameTime;
         if (this.pressedKeys[16]) { // Shift, speed up
             speed *= 5;
         }
         // This is our first person movement code. It's not really pretty, but it works
         if (this.pressedKeys['W'.charCodeAt(0)]) {
-            dir[1] += speed;
+            this.vec3Temp1[1] += speed;
         }
         if (this.pressedKeys['S'.charCodeAt(0)]) {
-            dir[1] -= speed;
+            this.vec3Temp1[1] -= speed;
         }
         if (this.pressedKeys['A'.charCodeAt(0)]) {
-            dir[0] -= speed;
+            this.vec3Temp1[0] -= speed;
         }
         if (this.pressedKeys['D'.charCodeAt(0)]) {
-            dir[0] += speed;
+            this.vec3Temp1[0] += speed;
         }
         if (this.pressedKeys[32]) { // Space, moves up
-            dir[2] += speed;
+            this.vec3Temp1[2] += speed;
         }
         if (this.pressedKeys['C'.charCodeAt(0)]) { // C, moves down
-            dir[2] -= speed;
+            this.vec3Temp1[2] -= speed;
         }
-        if (dir[0] !== 0 || dir[1] !== 0 || dir[2] !== 0) {
+        if (this.vec3Temp1[0] !== 0 || this.vec3Temp1[1] !== 0 || this.vec3Temp1[2] !== 0) {
             let cam = this._cameraMat;
             identity(cam);
             rotateX(cam, cam, this.angles[0]);
             rotateZ$1(cam, cam, this.angles[1]);
             invert(cam, cam);
-            transformMat4(dir, dir, cam);
+            console.log(this.position);
+            transformMat4(this.vec3Temp1, this.vec3Temp1, cam);
             // Move the camera in the direction we are facing
-            add(this.position, this.position, dir);
+            add(this.position, this.position, this.vec3Temp1);
+            // Restrict movement to the bounding box
+            if (this.options.boundingBox) {
+                const { boundingBox } = this.options;
+                if (this.position[0] < boundingBox.minX) {
+                    this.position[0] = boundingBox.minX;
+                }
+                if (this.position[0] > boundingBox.maxX) {
+                    this.position[0] = boundingBox.maxX;
+                }
+                if (this.position[1] < boundingBox.minY) {
+                    this.position[1] = boundingBox.minY;
+                }
+                if (this.position[1] > boundingBox.maxY) {
+                    this.position[1] = boundingBox.maxY;
+                }
+                if (this.position[2] < boundingBox.minZ) {
+                    this.position[2] = boundingBox.minZ;
+                }
+                if (this.position[2] > boundingBox.maxZ) {
+                    this.position[2] = boundingBox.maxZ;
+                }
+            }
             this._dirty = true;
         }
     }
@@ -4614,6 +4649,24 @@ class FreeMovement {
         callback();
     }
     ;
+    updatePosition(position) {
+        if (this.fpsCamera) {
+            this.fpsCamera.position[0] = position[0];
+            this.fpsCamera.position[1] = position[1];
+            this.fpsCamera.position[2] = position[2];
+            this.fpsCamera.dirty = true;
+            this.fpsCamera.update(0);
+        }
+    }
+    updateRotation(rotation) {
+        if (this.fpsCamera) {
+            this.fpsCamera.angles[0] = rotation[0];
+            this.fpsCamera.angles[1] = rotation[1];
+            this.fpsCamera.angles[2] = rotation[2];
+            this.fpsCamera.dirty = true;
+            this.fpsCamera.update(0);
+        }
+    }
 }
 
 const FOV_LANDSCAPE = 35.0;
@@ -4779,7 +4832,15 @@ class Renderer extends BaseRenderer {
         this.freeMovement = new FreeMovement(this, {
             canvas: this.canvas,
             movementSpeed: 35,
-            rotationSpeed: 0.006
+            rotationSpeed: 0.006,
+            boundingBox: {
+                minX: -500,
+                maxX: 500,
+                minY: -500,
+                maxY: 500,
+                minZ: 10,
+                maxZ: 500
+            }
         });
         this.setCameraMode(CameraMode.Orbiting);
     }
@@ -5301,20 +5362,22 @@ class Renderer extends BaseRenderer {
         this.gl.uniform1f(shader.pcfBiasCorrection, this.PCF_BIAS_CORRECTION);
     }
     setCameraMode(mode) {
-        var _a, _b, _c, _d, _e, _f;
-        this.cameraMode = mode;
-        if (this.cameraMode === CameraMode.Orbiting) {
+        var _a, _b, _c, _d, _e, _f, _g, _h;
+        if (mode === CameraMode.Orbiting) {
             (_a = this.orbitControls) === null || _a === void 0 ? void 0 : _a.enable();
             (_b = this.freeMovement) === null || _b === void 0 ? void 0 : _b.disable();
         }
-        else if (this.cameraMode === CameraMode.FPS) {
-            (_c = this.orbitControls) === null || _c === void 0 ? void 0 : _c.disable();
-            (_d = this.freeMovement) === null || _d === void 0 ? void 0 : _d.enable();
+        else if (mode === CameraMode.FPS) {
+            (_c = this.freeMovement) === null || _c === void 0 ? void 0 : _c.updatePosition([0, -400, 150]);
+            (_d = this.freeMovement) === null || _d === void 0 ? void 0 : _d.updateRotation([0.39, 0, 0]);
+            (_e = this.orbitControls) === null || _e === void 0 ? void 0 : _e.disable();
+            (_f = this.freeMovement) === null || _f === void 0 ? void 0 : _f.enable();
         }
         else {
-            (_e = this.orbitControls) === null || _e === void 0 ? void 0 : _e.disable();
-            (_f = this.freeMovement) === null || _f === void 0 ? void 0 : _f.disable();
+            (_g = this.orbitControls) === null || _g === void 0 ? void 0 : _g.disable();
+            (_h = this.freeMovement) === null || _h === void 0 ? void 0 : _h.disable();
         }
+        this.cameraMode = mode;
     }
     get currentCameraMode() {
         return this.cameraMode;

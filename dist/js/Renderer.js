@@ -184,7 +184,15 @@ class Renderer extends webgl_framework_1.BaseRenderer {
         this.freeMovement = new FreeMovement_1.FreeMovement(this, {
             canvas: this.canvas,
             movementSpeed: 35,
-            rotationSpeed: 0.006
+            rotationSpeed: 0.006,
+            boundingBox: {
+                minX: -500,
+                maxX: 500,
+                minY: -500,
+                maxY: 500,
+                minZ: 10,
+                maxZ: 500
+            }
         });
         this.setCameraMode(CameraMode_1.CameraMode.Orbiting);
     }
@@ -706,20 +714,22 @@ class Renderer extends webgl_framework_1.BaseRenderer {
         this.gl.uniform1f(shader.pcfBiasCorrection, this.PCF_BIAS_CORRECTION);
     }
     setCameraMode(mode) {
-        var _a, _b, _c, _d, _e, _f;
-        this.cameraMode = mode;
-        if (this.cameraMode === CameraMode_1.CameraMode.Orbiting) {
+        var _a, _b, _c, _d, _e, _f, _g, _h;
+        if (mode === CameraMode_1.CameraMode.Orbiting) {
             (_a = this.orbitControls) === null || _a === void 0 ? void 0 : _a.enable();
             (_b = this.freeMovement) === null || _b === void 0 ? void 0 : _b.disable();
         }
-        else if (this.cameraMode === CameraMode_1.CameraMode.FPS) {
-            (_c = this.orbitControls) === null || _c === void 0 ? void 0 : _c.disable();
-            (_d = this.freeMovement) === null || _d === void 0 ? void 0 : _d.enable();
+        else if (mode === CameraMode_1.CameraMode.FPS) {
+            (_c = this.freeMovement) === null || _c === void 0 ? void 0 : _c.updatePosition([0, -400, 150]);
+            (_d = this.freeMovement) === null || _d === void 0 ? void 0 : _d.updateRotation([0.39, 0, 0]);
+            (_e = this.orbitControls) === null || _e === void 0 ? void 0 : _e.disable();
+            (_f = this.freeMovement) === null || _f === void 0 ? void 0 : _f.enable();
         }
         else {
-            (_e = this.orbitControls) === null || _e === void 0 ? void 0 : _e.disable();
-            (_f = this.freeMovement) === null || _f === void 0 ? void 0 : _f.disable();
+            (_g = this.orbitControls) === null || _g === void 0 ? void 0 : _g.disable();
+            (_h = this.freeMovement) === null || _h === void 0 ? void 0 : _h.disable();
         }
+        this.cameraMode = mode;
     }
     get currentCameraMode() {
         return this.cameraMode;
