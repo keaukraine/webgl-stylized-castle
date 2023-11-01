@@ -113,7 +113,6 @@ class Renderer extends webgl_framework_1.BaseRenderer {
             [2.0000, 2.9000, -13.8560],
             [-0.9000, 3.8, -9.3260]
         ];
-        // vec3.normalize(this.lightDir, [-1, -1, 1]);
         this.cameraPositionInterpolator.speed = this.CAMERA_SPEED;
         this.cameraPositionInterpolator.minDuration = this.CAMERA_MIN_DURATION;
         this.randomizeCamera();
@@ -156,7 +155,6 @@ class Renderer extends webgl_framework_1.BaseRenderer {
         this.customCamera = camera;
         if (position !== undefined) {
             this.cameraPosition = position;
-            // console.log(this.cameraPosition);
         }
         if (rotation !== undefined) {
             this.cameraRotation = rotation;
@@ -202,6 +200,7 @@ class Renderer extends webgl_framework_1.BaseRenderer {
         (_b = document.getElementById("alertError")) === null || _b === void 0 ? void 0 : _b.classList.remove("hidden");
     }
     initShaders() {
+        this.shaderDiffuse = new webgl_framework_1.DiffuseShader(this.gl);
         this.shaderObjects = new VertexColorSmShader_1.VertexColorSmShader(this.gl);
         this.shaderObjectsDepth = new VertexColorDepthShader_1.VertexColorDepthShader(this.gl);
         this.shaderFlag = new FlagSmShader_1.FlagSmShader(this.gl);
@@ -249,7 +248,6 @@ class Renderer extends webgl_framework_1.BaseRenderer {
         ]);
         this.generateMipmaps(this.textureKnight, this.textureEagle);
         this.loaded = true;
-        // this.timerFade = 0;
         this.timers.set(TimersEnum_1.Timers.Fade, 0);
         console.log("Loaded all assets");
         this.initOffscreen();
@@ -320,13 +318,9 @@ class Renderer extends webgl_framework_1.BaseRenderer {
         const x = sina * lightDistance;
         const y = cosa * lightDistance;
         const z = lightHeight;
-        // z += Math.sin(a * Math.PI * 24) * 100;
         this.pointLight[0] = x;
         this.pointLight[1] = y;
         this.pointLight[2] = z;
-        // this.lightDir[0] = this.pointLight[0];
-        // this.lightDir[1] = this.pointLight[1];
-        // this.lightDir[2] = this.pointLight[2];
         gl_matrix_1.mat4.lookAt(this.mVMatrix, [x, y, z], // eye
         [0, 0, 0], // center
         [0, 0, 1] // up vector
@@ -709,7 +703,6 @@ class Renderer extends webgl_framework_1.BaseRenderer {
         this.calculateMVPMatrix(tx, ty, tz, rx, ry, rz, sx, sy, sz);
         this.gl.uniformMatrix4fv(shader.modelMatrix, false, this.mMMatrix);
         this.gl.uniformMatrix4fv(shader.lightMatrix, false, this.mViewMatrixLight, 0);
-        // this.gl.uniform1f(shader.shadowBrightnessVS!, this.config.shadowBrightness);
         this.gl.uniform1f(shader.shadowBrightnessFS, this.config.shadowBrightness);
         this.gl.uniform1f(shader.pcfBiasCorrection, this.PCF_BIAS_CORRECTION);
     }
@@ -819,7 +812,6 @@ class Renderer extends webgl_framework_1.BaseRenderer {
     }
     randomizeCamera() {
         this.currentRandomCamera = (this.currentRandomCamera + 1 + Math.trunc(Math.random() * (Cameras_1.CAMERAS.length - 2))) % Cameras_1.CAMERAS.length;
-        // this.currentRandomCamera = 0; // FIXME
         this.cameraPositionInterpolator.speed = this.CAMERA_SPEED * Cameras_1.CAMERAS[this.currentRandomCamera].speedMultiplier;
         this.cameraPositionInterpolator.position = Cameras_1.CAMERAS[this.currentRandomCamera];
         this.cameraPositionInterpolator.reset();

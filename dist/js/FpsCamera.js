@@ -127,7 +127,6 @@ class FpsCamera {
             gl_matrix_1.mat4.rotateX(cam, cam, this.angles[0]);
             gl_matrix_1.mat4.rotateZ(cam, cam, this.angles[1]);
             gl_matrix_1.mat4.invert(cam, cam);
-            console.log(this.position);
             gl_matrix_1.vec3.transformMat4(this.vec3Temp1, this.vec3Temp1, cam);
             // Move the camera in the direction we are facing
             gl_matrix_1.vec3.add(this.position, this.position, this.vec3Temp1);

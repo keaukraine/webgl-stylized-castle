@@ -124,8 +124,6 @@ export class Renderer extends BaseRenderer {
 
     private readyCallback: (() => void) | undefined;
 
-    // private lightDir = vec3.create();
-
     // shadowmaps stuff
     private textureOffscreenColor: WebGLTexture | undefined
     private textureOffscreenDepth: WebGLTexture | undefined;
@@ -174,7 +172,6 @@ export class Renderer extends BaseRenderer {
 
     constructor() {
         super();
-        // vec3.normalize(this.lightDir, [-1, -1, 1]);
 
         this.cameraPositionInterpolator.speed = this.CAMERA_SPEED;
         this.cameraPositionInterpolator.minDuration = this.CAMERA_MIN_DURATION;
@@ -221,7 +218,6 @@ export class Renderer extends BaseRenderer {
 
         if (position !== undefined) {
             this.cameraPosition = position;
-            // console.log(this.cameraPosition);
         }
         if (rotation !== undefined) {
             this.cameraRotation = rotation;
@@ -278,6 +274,7 @@ export class Renderer extends BaseRenderer {
     }
 
     initShaders(): void {
+        this.shaderDiffuse = new DiffuseShader(this.gl);
         this.shaderObjects = new VertexColorSmShader(this.gl);
         this.shaderObjectsDepth = new VertexColorDepthShader(this.gl);
         this.shaderFlag = new FlagSmShader(this.gl);
@@ -329,7 +326,6 @@ export class Renderer extends BaseRenderer {
         this.generateMipmaps(this.textureKnight, this.textureEagle);
 
         this.loaded = true;
-        // this.timerFade = 0;
         this.timers.set(Timers.Fade, 0);
         console.log("Loaded all assets");
 
@@ -413,14 +409,10 @@ export class Renderer extends BaseRenderer {
         const x = sina * lightDistance;
         const y = cosa * lightDistance;
         const z = lightHeight;
-        // z += Math.sin(a * Math.PI * 24) * 100;
 
         this.pointLight[0] = x;
         this.pointLight[1] = y;
         this.pointLight[2] = z;
-        // this.lightDir[0] = this.pointLight[0];
-        // this.lightDir[1] = this.pointLight[1];
-        // this.lightDir[2] = this.pointLight[2];
 
         mat4.lookAt(this.mVMatrix,
             [x, y, z], // eye
@@ -1026,7 +1018,6 @@ export class Renderer extends BaseRenderer {
         this.calculateMVPMatrix(tx, ty, tz, rx, ry, rz, sx, sy, sz);
         this.gl.uniformMatrix4fv(shader.modelMatrix!, false, this.mMMatrix);
         this.gl.uniformMatrix4fv(shader.lightMatrix!, false, this.mViewMatrixLight, 0);
-        // this.gl.uniform1f(shader.shadowBrightnessVS!, this.config.shadowBrightness);
         this.gl.uniform1f(shader.shadowBrightnessFS!, this.config.shadowBrightness);
         this.gl.uniform1f(shader.pcfBiasCorrection!, this.PCF_BIAS_CORRECTION);
     }
@@ -1154,7 +1145,6 @@ export class Renderer extends BaseRenderer {
 
     private randomizeCamera(): void {
         this.currentRandomCamera = (this.currentRandomCamera + 1 + Math.trunc(Math.random() * (CAMERAS.length - 2))) % CAMERAS.length;
-        // this.currentRandomCamera = 0; // FIXME
 
         this.cameraPositionInterpolator.speed = this.CAMERA_SPEED * CAMERAS[this.currentRandomCamera].speedMultiplier;
         this.cameraPositionInterpolator.position = CAMERAS[this.currentRandomCamera];

@@ -1667,6 +1667,51 @@ class TextureUtils {
     }
 }
 
+class DiffuseShader extends BaseShader {
+    /** @inheritdoc */
+    fillCode() {
+        this.vertexShaderCode = 'uniform mat4 view_proj_matrix;\n' +
+            'attribute vec4 rm_Vertex;\n' +
+            'attribute vec2 rm_TexCoord0;\n' +
+            'varying vec2 vTextureCoord;\n' +
+            '\n' +
+            'void main() {\n' +
+            '  gl_Position = view_proj_matrix * rm_Vertex;\n' +
+            '  vTextureCoord = rm_TexCoord0;\n' +
+            '}';
+        this.fragmentShaderCode = 'precision mediump float;\n' +
+            'varying vec2 vTextureCoord;\n' +
+            'uniform sampler2D sTexture;\n' +
+            '\n' +
+            'void main() {\n' +
+            '  gl_FragColor = texture2D(sTexture, vTextureCoord);\n' +
+            '}';
+    }
+    /** @inheritdoc */
+    fillUniformsAttributes() {
+        this.view_proj_matrix = this.getUniform('view_proj_matrix');
+        this.rm_Vertex = this.getAttrib('rm_Vertex');
+        this.rm_TexCoord0 = this.getAttrib('rm_TexCoord0');
+        this.sTexture = this.getUniform('sTexture');
+    }
+    /** @inheritdoc */
+    drawModel(renderer, model, tx, ty, tz, rx, ry, rz, sx, sy, sz) {
+        if (this.rm_Vertex === undefined || this.rm_TexCoord0 === undefined || this.view_proj_matrix === undefined) {
+            return;
+        }
+        const gl = renderer.gl;
+        model.bindBuffers(gl);
+        gl.enableVertexAttribArray(this.rm_Vertex);
+        gl.enableVertexAttribArray(this.rm_TexCoord0);
+        gl.vertexAttribPointer(this.rm_Vertex, 3, gl.FLOAT, false, 4 * (3 + 2), 0);
+        gl.vertexAttribPointer(this.rm_TexCoord0, 2, gl.FLOAT, false, 4 * (3 + 2), 4 * 3);
+        renderer.calculateMVPMatrix(tx, ty, tz, rx, ry, rz, sx, sy, sz);
+        gl.uniformMatrix4fv(this.view_proj_matrix, false, renderer.getMVPMatrix());
+        gl.drawElements(gl.TRIANGLES, model.getNumIndices() * 3, gl.UNSIGNED_SHORT, 0);
+        renderer.checkGlError("DiffuseShader glDrawElements");
+    }
+}
+
 /**
  * Common utilities
  * @module glMatrix
@@ -4569,7 +4614,6 @@ class FpsCamera {
             rotateX(cam, cam, this.angles[0]);
             rotateZ$1(cam, cam, this.angles[1]);
             invert(cam, cam);
-            console.log(this.position);
             transformMat4(this.vec3Temp1, this.vec3Temp1, cam);
             // Move the camera in the direction we are facing
             add(this.position, this.position, this.vec3Temp1);
@@ -4761,7 +4805,6 @@ class Renderer extends BaseRenderer {
             [2.0000, 2.9000, -13.8560],
             [-0.9000, 3.8, -9.3260]
         ];
-        // vec3.normalize(this.lightDir, [-1, -1, 1]);
         this.cameraPositionInterpolator.speed = this.CAMERA_SPEED;
         this.cameraPositionInterpolator.minDuration = this.CAMERA_MIN_DURATION;
         this.randomizeCamera();
@@ -4804,7 +4847,6 @@ class Renderer extends BaseRenderer {
         this.customCamera = camera;
         if (position !== undefined) {
             this.cameraPosition = position;
-            // console.log(this.cameraPosition);
         }
         if (rotation !== undefined) {
             this.cameraRotation = rotation;
@@ -4850,6 +4892,7 @@ class Renderer extends BaseRenderer {
         (_b = document.getElementById("alertError")) === null || _b === void 0 ? void 0 : _b.classList.remove("hidden");
     }
     initShaders() {
+        this.shaderDiffuse = new DiffuseShader(this.gl);
         this.shaderObjects = new VertexColorSmShader(this.gl);
         this.shaderObjectsDepth = new VertexColorDepthShader(this.gl);
         this.shaderFlag = new FlagSmShader(this.gl);
@@ -4897,7 +4940,6 @@ class Renderer extends BaseRenderer {
         ]);
         this.generateMipmaps(this.textureKnight, this.textureEagle);
         this.loaded = true;
-        // this.timerFade = 0;
         this.timers.set(Timers.Fade, 0);
         console.log("Loaded all assets");
         this.initOffscreen();
@@ -4968,13 +5010,9 @@ class Renderer extends BaseRenderer {
         const x = sina * lightDistance;
         const y = cosa * lightDistance;
         const z = lightHeight;
-        // z += Math.sin(a * Math.PI * 24) * 100;
         this.pointLight[0] = x;
         this.pointLight[1] = y;
         this.pointLight[2] = z;
-        // this.lightDir[0] = this.pointLight[0];
-        // this.lightDir[1] = this.pointLight[1];
-        // this.lightDir[2] = this.pointLight[2];
         lookAt(this.mVMatrix, [x, y, z], // eye
         [0, 0, 0], // center
         [0, 0, 1] // up vector
@@ -5357,7 +5395,6 @@ class Renderer extends BaseRenderer {
         this.calculateMVPMatrix(tx, ty, tz, rx, ry, rz, sx, sy, sz);
         this.gl.uniformMatrix4fv(shader.modelMatrix, false, this.mMMatrix);
         this.gl.uniformMatrix4fv(shader.lightMatrix, false, this.mViewMatrixLight, 0);
-        // this.gl.uniform1f(shader.shadowBrightnessVS!, this.config.shadowBrightness);
         this.gl.uniform1f(shader.shadowBrightnessFS, this.config.shadowBrightness);
         this.gl.uniform1f(shader.pcfBiasCorrection, this.PCF_BIAS_CORRECTION);
     }
@@ -5467,7 +5504,6 @@ class Renderer extends BaseRenderer {
     }
     randomizeCamera() {
         this.currentRandomCamera = (this.currentRandomCamera + 1 + Math.trunc(Math.random() * (CAMERAS.length - 2))) % CAMERAS.length;
-        // this.currentRandomCamera = 0; // FIXME
         this.cameraPositionInterpolator.speed = this.CAMERA_SPEED * CAMERAS[this.currentRandomCamera].speedMultiplier;
         this.cameraPositionInterpolator.position = CAMERAS[this.currentRandomCamera];
         this.cameraPositionInterpolator.reset();

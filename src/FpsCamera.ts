@@ -175,7 +175,6 @@ export class FpsCamera {
             mat4.rotateX(cam, cam, this.angles[0]);
             mat4.rotateZ(cam, cam, this.angles[1]);
             mat4.invert(cam, cam);
-            console.log(this.position);
 
             vec3.transformMat4(this.vec3Temp1, this.vec3Temp1, cam);
 
