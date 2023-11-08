@@ -1,3 +1,5 @@
+
+(function(l, r) { if (l.getElementById('livereloadscript')) return; r = l.createElement('script'); r.async = 1; r.src = '//' + (window.location.host || 'localhost').split(':')[0] + ':35729/livereload.js?snipver=1'; r.id = 'livereloadscript'; l.getElementsByTagName('head')[0].appendChild(r) })(window.document);
 class FullScreenUtils {
     /** Enters fullscreen. */
     enterFullScreen() {
@@ -2497,7 +2499,8 @@ out float vLamb;
 const mat4 ScaleMatrix = mat4(0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.5, 0.5, 0.5, 1.0);
 // const float BIAS = 0.2; // adjustable, for 4096 shadowmap
 // const float BIAS = 0.4; // adjustable, for 2048 shadowmap
-const float BIAS = 0.1; // adjustable, for 2500 shadowmap
+// const float BIAS = 0.2; // adjustable, for 2500 shadowmap
+const float BIAS = 0.0; // adjustable, for 2500 shadowmap
 `;
 /** Uniforms, varyings and constants for shadowmap FS. */
 const UNIFORMS_VARYINGS_CONST_FS = `
@@ -2552,6 +2555,7 @@ class VertexColorSmShader extends BaseShader {
 
             out vec4 vDiffuseColor;
             out float vLightCoeff;
+            out float vBias;
 
             in vec4 rm_Vertex;
             in uint rm_Color;
@@ -2588,6 +2592,7 @@ class VertexColorSmShader extends BaseShader {
                 vec3 LightVec = normalize(lightVector);
                 vec3 worldNormal = normalize(mat3(modelMatrix) * rm_Normal);
                 float lamb = (dot(worldNormal, LightVec)); // range is -1...1 https://chortle.ccsu.edu/vectorlessons/vch09/vch09_6.html
+                vBias = lamb > 0. ? -0.0001 : 0.0001;
                 vec4 vertex = rm_Vertex;
                 vertex.xyz += worldNormal * BIAS * (ONE - lamb);
                 vPosition = ScaleMatrix * projectionMatrix * lightMatrix * modelMatrix * vertex;
@@ -2600,6 +2605,7 @@ class VertexColorSmShader extends BaseShader {
 
             in mediump vec4 vDiffuseColor;
             in mediump float vLightCoeff;
+            in float vBias;
             out vec4 fragColor;
 
             uniform mediump vec4 diffuse;
@@ -2615,11 +2621,27 @@ class VertexColorSmShader extends BaseShader {
             {
                 highp vec3 depth = vPosition.xyz / vPosition.w;
 
-                ${shadowSmoothConditional5TapEs3("vFogAmount > 0.1")}
+                /*${shadowSmoothConditional5TapEs3("vFogAmount > 0.1")}*/
+
+                float colorCoeff = 0.; // 0 = fully shadowed, 1 = out of shadow
+                depth.z += vBias - pcfBiasCorrection;
+                if (vFogAmount > 0.1) { // unfiltered
+                    colorCoeff = texture(sDepth, depth);
+                } else { // 5 taps PCF
+                    colorCoeff = texture(sDepth, depth);
+                    colorCoeff += texture(sDepth, vec3(depth.x-texelSize, depth.y-texelSize, depth.z));
+                    colorCoeff += texture(sDepth, vec3(depth.x-texelSize, depth.y+texelSize, depth.z));
+                    colorCoeff += texture(sDepth, vec3(depth.x+texelSize, depth.y-texelSize, depth.z));
+                    colorCoeff += texture(sDepth, vec3(depth.x+texelSize, depth.y+texelSize, depth.z));
+                    const float SAMPLES_COUNT = 5.0;
+                    colorCoeff /= SAMPLES_COUNT;
+                }
 
                 colorCoeff = clamp(colorCoeff, shadowBrightnessFS, 1.); // clamp to limit shadow intensity
                 float lightCoeff = min(colorCoeff, vLightCoeff); // this mixes Lambert and shadow coefficients
                 fragColor = vDiffuseColor * mix(ambient, diffuse, lightCoeff);
+
+                // fragColor.r *= vBias * 3000.;
 
                 // Fog stuff
                 ${FOG_CHUNK_FS}
@@ -4779,8 +4801,8 @@ class Renderer extends BaseRenderer {
             shadowResolution: 2
         };
         this.SHADOWMAP_SIZE = 1024 * 2.0; // can be reduced to 1.3 with still OK quality
-        this.SHADOWMAP_TEXEL_OFFSET_SCALE = 0.666;
-        this.PCF_BIAS_CORRECTION = 1.5 / this.SHADOWMAP_SIZE; // ~1.5 texels
+        this.SHADOWMAP_TEXEL_OFFSET_SCALE = 0.5;
+        this.PCF_BIAS_CORRECTION = 1.2 / this.SHADOWMAP_SIZE; // ~1.2 texels
         this.mViewMatrixLight = create$1();
         this.mProjMatrixLight = create$1();
         this.pointLight = create();
@@ -5514,7 +5536,7 @@ class Renderer extends BaseRenderer {
     }
     updateShadowResolution(scale) {
         this.SHADOWMAP_SIZE = 1024 * scale;
-        this.PCF_BIAS_CORRECTION = 1.5 / this.SHADOWMAP_SIZE;
+        this.PCF_BIAS_CORRECTION = 1.2 / this.SHADOWMAP_SIZE;
         this.initOffscreen();
     }
 }

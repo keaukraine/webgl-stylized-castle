@@ -57,6 +57,7 @@ export class VertexColorSmShader extends BaseShader implements DrawableShader, I
 
             out vec4 vDiffuseColor;
             out float vLightCoeff;
+            out float vBias;
 
             in vec4 rm_Vertex;
             in uint rm_Color;
@@ -93,6 +94,7 @@ export class VertexColorSmShader extends BaseShader implements DrawableShader, I
                 vec3 LightVec = normalize(lightVector);
                 vec3 worldNormal = normalize(mat3(modelMatrix) * rm_Normal);
                 float lamb = (dot(worldNormal, LightVec)); // range is -1...1 https://chortle.ccsu.edu/vectorlessons/vch09/vch09_6.html
+                vBias = lamb > 0. ? -0.0001 : 0.0001;
                 vec4 vertex = rm_Vertex;
                 vertex.xyz += worldNormal * BIAS * (ONE - lamb);
                 vPosition = ScaleMatrix * projectionMatrix * lightMatrix * modelMatrix * vertex;
@@ -106,6 +108,7 @@ export class VertexColorSmShader extends BaseShader implements DrawableShader, I
 
             in mediump vec4 vDiffuseColor;
             in mediump float vLightCoeff;
+            in float vBias;
             out vec4 fragColor;
 
             uniform mediump vec4 diffuse;
@@ -121,11 +124,27 @@ export class VertexColorSmShader extends BaseShader implements DrawableShader, I
             {
                 highp vec3 depth = vPosition.xyz / vPosition.w;
 
-                ${shadowSmoothConditional5TapEs3("vFogAmount > 0.1")}
+                /*${shadowSmoothConditional5TapEs3("vFogAmount > 0.1")}*/
+
+                float colorCoeff = 0.; // 0 = fully shadowed, 1 = out of shadow
+                depth.z += vBias - pcfBiasCorrection;
+                if (vFogAmount > 0.1) { // unfiltered
+                    colorCoeff = texture(sDepth, depth);
+                } else { // 5 taps PCF
+                    colorCoeff = texture(sDepth, depth);
+                    colorCoeff += texture(sDepth, vec3(depth.x-texelSize, depth.y-texelSize, depth.z));
+                    colorCoeff += texture(sDepth, vec3(depth.x-texelSize, depth.y+texelSize, depth.z));
+                    colorCoeff += texture(sDepth, vec3(depth.x+texelSize, depth.y-texelSize, depth.z));
+                    colorCoeff += texture(sDepth, vec3(depth.x+texelSize, depth.y+texelSize, depth.z));
+                    const float SAMPLES_COUNT = 5.0;
+                    colorCoeff /= SAMPLES_COUNT;
+                }
 
                 colorCoeff = clamp(colorCoeff, shadowBrightnessFS, 1.); // clamp to limit shadow intensity
                 float lightCoeff = min(colorCoeff, vLightCoeff); // this mixes Lambert and shadow coefficients
                 fragColor = vDiffuseColor * mix(ambient, diffuse, lightCoeff);
+
+                // fragColor.r *= vBias * 3000.;
 
                 // Fog stuff
                 ${FOG_CHUNK_FS}

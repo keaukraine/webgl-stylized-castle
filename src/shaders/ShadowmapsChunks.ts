@@ -90,7 +90,8 @@ out float vLamb;
 const mat4 ScaleMatrix = mat4(0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.5, 0.5, 0.5, 1.0);
 // const float BIAS = 0.2; // adjustable, for 4096 shadowmap
 // const float BIAS = 0.4; // adjustable, for 2048 shadowmap
-const float BIAS = 0.1; // adjustable, for 2500 shadowmap
+// const float BIAS = 0.2; // adjustable, for 2500 shadowmap
+const float BIAS = 0.0; // adjustable, for 2500 shadowmap
 `;
 
 /** Uniforms, varyings and constants for shadowmap FS. */

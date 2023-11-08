@@ -130,8 +130,8 @@ export class Renderer extends BaseRenderer {
     private fboOffscreen: FrameBuffer | undefined;
 
     protected SHADOWMAP_SIZE = 1024 * 2.0; // can be reduced to 1.3 with still OK quality
-    protected readonly SHADOWMAP_TEXEL_OFFSET_SCALE = 0.666;
-    protected PCF_BIAS_CORRECTION = 1.5 / this.SHADOWMAP_SIZE; // ~1.5 texels
+    protected readonly SHADOWMAP_TEXEL_OFFSET_SCALE = 0.5;
+    protected PCF_BIAS_CORRECTION = 1.2 / this.SHADOWMAP_SIZE; // ~1.2 texels
 
     private mQuadTriangles: Float32Array | undefined;
     private mTriangleVerticesVignette: WebGLBuffer | undefined;
@@ -1159,7 +1159,7 @@ export class Renderer extends BaseRenderer {
 
     public updateShadowResolution(scale: number): void {
         this.SHADOWMAP_SIZE = 1024 * scale;
-        this.PCF_BIAS_CORRECTION = 1.5 / this.SHADOWMAP_SIZE;
+        this.PCF_BIAS_CORRECTION = 1.2 / this.SHADOWMAP_SIZE;
         this.initOffscreen();
     }
 }

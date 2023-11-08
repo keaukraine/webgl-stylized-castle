@@ -80,7 +80,7 @@ export declare class Renderer extends BaseRenderer {
     private textureOffscreenDepth;
     private fboOffscreen;
     protected SHADOWMAP_SIZE: number;
-    protected readonly SHADOWMAP_TEXEL_OFFSET_SCALE = 0.666;
+    protected readonly SHADOWMAP_TEXEL_OFFSET_SCALE = 0.5;
     protected PCF_BIAS_CORRECTION: number;
     private mQuadTriangles;
     private mTriangleVerticesVignette;
