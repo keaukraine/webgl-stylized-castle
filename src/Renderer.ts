@@ -539,10 +539,10 @@ export class Renderer extends BaseRenderer {
         this.setTexture2D(0, this.textureAoDepth!, this.shaderSsao.sDepth!);
         this.gl.uniformMatrix4fv(this.shaderSsao.invProjMatrix!, false, this.mInverseProjMatrix);
         this.gl.uniform2f(this.shaderSsao.texelSize!, 1 / this.aoWidth, 1 / this.aoHeight);
-        this.gl.uniform1f(this.shaderSsao.radius!, 24.0);
-        this.gl.uniform1f(this.shaderSsao.depthRange!, 30.0);
+        this.gl.uniform1f(this.shaderSsao.radius!, 30.0);
+        this.gl.uniform1f(this.shaderSsao.depthRange!, 40.0);
         // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "ligher" AO output.
-        this.gl.uniform1f(this.shaderSsao.bias!, 0.17);
+        this.gl.uniform1f(this.shaderSsao.bias!, 0.1);
         this.gl.uniform1f(this.shaderSsao.intensity!, 3.0);
 
         this.drawVignette(this.shaderSsao);
