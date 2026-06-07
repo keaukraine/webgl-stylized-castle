@@ -108,6 +108,8 @@ export declare class Renderer extends BaseRenderer {
     protected readonly smallFlags3: number[][];
     protected orbitControls?: OrbitControls;
     protected freeMovement?: FreeMovement;
+    /** AO render target size as a fraction of the canvas size. */
+    protected AO_SCALE: number;
     protected aoWidth: number;
     protected aoHeight: number;
     constructor();
@@ -134,7 +136,7 @@ export declare class Renderer extends BaseRenderer {
     drawScene(): void;
     drawSsaoPass(): void;
     getLightFov(): number;
-    drawTestDepthMap(): void;
+    drawTestFullscreenQuad(): void;
     protected drawVignette(shader: {
         rm_Vertex: number | undefined;
         rm_TexCoord0: number | undefined;
@@ -172,6 +174,7 @@ export declare class Renderer extends BaseRenderer {
     getCanvas(): HTMLCanvasElement | undefined;
     protected createDepthTexture(gl: WebGL2RenderingContext, texWidth: number, texHeight: number): WebGLTexture | null;
     protected initOffscreen(): void;
+    protected initAO(): void;
     private initVignette;
     private logCamera;
     private randomizeCamera;

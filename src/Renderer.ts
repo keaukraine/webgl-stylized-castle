@@ -179,6 +179,8 @@ export class Renderer extends BaseRenderer {
     protected orbitControls?: OrbitControls;
     protected freeMovement?: FreeMovement;
 
+    /** AO render target size as a fraction of the canvas size. */
+    protected AO_SCALE = 0.5;
     protected aoWidth = 600;
     protected aoHeight = 400;
 
@@ -343,6 +345,7 @@ export class Renderer extends BaseRenderer {
         console.log("Loaded all assets");
 
         this.initOffscreen();
+        this.initAO();
         this.initVignette();
 
         this.readyCallback?.();
@@ -352,7 +355,21 @@ export class Renderer extends BaseRenderer {
         if (this.canvas === undefined) {
             return;
         }
+
+        const oldWidth = this.canvas.width;
+        const oldHeight = this.canvas.height;
+
         super.resizeCanvas();
+
+        if (this.canvas.width !== oldWidth || this.canvas.height !== oldHeight) {
+            this.aoWidth = Math.max(1, Math.round(this.canvas.width * this.AO_SCALE));
+            this.aoHeight = Math.max(1, Math.round(this.canvas.height * this.AO_SCALE));
+
+            // fboAO is only undefined during the very first resize, before initAO() has run for the first time
+            if (this.fboAO !== undefined) {
+                this.initAO();
+            }
+        }
     }
 
     animate(): void {
@@ -524,8 +541,9 @@ export class Renderer extends BaseRenderer {
         this.gl.uniform2f(this.shaderSsao.texelSize!, 1 / this.aoWidth, 1 / this.aoHeight);
         this.gl.uniform1f(this.shaderSsao.radius!, 24.0);
         this.gl.uniform1f(this.shaderSsao.depthRange!, 30.0);
-        this.gl.uniform1f(this.shaderSsao.bias!, 0.15); // higher bias fixes z stepping artifacts on surfaces
-        this.gl.uniform1f(this.shaderSsao.intensity!, 2.0);
+        // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "ligher" AO output.
+        this.gl.uniform1f(this.shaderSsao.bias!, 0.17);
+        this.gl.uniform1f(this.shaderSsao.intensity!, 3.0);
 
         this.drawVignette(this.shaderSsao);
 
@@ -1174,6 +1192,17 @@ export class Renderer extends BaseRenderer {
         this.fboOffscreen.createGLData(this.SHADOWMAP_SIZE, this.SHADOWMAP_SIZE);
         this.checkGlError("offscreen FBO");
 
+        console.log("Initialized offscreen FBO.");
+    }
+
+    protected initAO() {
+        if (this.textureAoColor !== undefined) {
+            this.gl.deleteTexture(this.textureAoColor);
+        }
+        if (this.textureAoDepth !== undefined) {
+            this.gl.deleteTexture(this.textureAoDepth);
+        }
+
         this.textureAoColor = TextureUtils.createNpotTexture(this.gl, this.aoWidth, this.aoHeight, false)!;
         this.textureAoDepth = TextureUtils.createDepthTexture(this.gl as WebGL2RenderingContext, this.aoWidth, this.aoHeight)!;
         this.fboAO = new FrameBuffer(this.gl);
@@ -1193,7 +1222,7 @@ export class Renderer extends BaseRenderer {
         this.fboSsao.createGLData(this.aoWidth, this.aoHeight);
         this.checkGlError("SSAO FBO");
 
-        console.log("Initialized offscreen FBO.");
+        console.log(`Initialized AO FBO. Size: ${this.aoWidth}x${this.aoHeight}, scale: ${this.AO_SCALE}`);
     }
 
     private initVignette() {

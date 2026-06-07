@@ -3910,7 +3910,7 @@ class SsaoShader extends BaseShader {
 
             ${ShaderCommonFunctions.RANDOM}
 
-            const int SAMPLES = 12;
+            const int SAMPLES = 82;
             const float GOLDEN_ANGLE = 2.39996323; // ~137.5 degrees, gives a well distributed spiral
 
             // Reconstructs view-space position from a depth buffer sample at the given UV
@@ -3931,10 +3931,32 @@ class SsaoShader extends BaseShader {
 
                 vec3 originPos = reconstructViewPos(vTextureCoord, originRawDepth);
 
-                // Approximate local surface normal from screen-space derivatives of the reconstructed
-                // position — the only "normal" information obtainable from a depth buffer alone.
-                // View-space camera looks down -Z, so a surface facing the camera has normal.z > 0.
-                vec3 normal = normalize(cross(dFdx(originPos), dFdy(originPos)));
+                // Approximate local surface normal from the reconstructed position of the four
+                // immediate neighbours — the only "normal" information obtainable from a depth
+                // buffer alone. Using one-sided differences (and picking the smaller jump on each
+                // axis) rather than a symmetric dFdx/dFdy avoids sampling across silhouette edges,
+                // where a central difference would straddle the object and the background and
+                // produce a garbage normal (visible as a dark outline around every object).
+                vec2 uvL = vTextureCoord - vec2(texelSize.x, 0.0);
+                vec2 uvR = vTextureCoord + vec2(texelSize.x, 0.0);
+                vec2 uvD = vTextureCoord - vec2(0.0, texelSize.y);
+                vec2 uvU = vTextureCoord + vec2(0.0, texelSize.y);
+
+                vec3 posL = reconstructViewPos(uvL, texture(sDepth, uvL).r);
+                vec3 posR = reconstructViewPos(uvR, texture(sDepth, uvR).r);
+                vec3 posD = reconstructViewPos(uvD, texture(sDepth, uvD).r);
+                vec3 posU = reconstructViewPos(uvU, texture(sDepth, uvU).r);
+
+                vec3 ddxL = originPos - posL;
+                vec3 ddxR = posR - originPos;
+                vec3 ddx = (abs(ddxL.z) < abs(ddxR.z)) ? ddxL : ddxR;
+
+                vec3 ddyD = originPos - posD;
+                vec3 ddyU = posU - originPos;
+                vec3 ddy = (abs(ddyD.z) < abs(ddyU.z)) ? ddyD : ddyU;
+
+                // View-space camera looks down -Z, so a surface facing the camera has normal.z > 0
+                vec3 normal = normalize(cross(ddx, ddy));
                 if (normal.z < 0.0) {
                     normal = -normal;
                 }
@@ -4948,6 +4970,8 @@ class Renderer extends BaseRenderer {
             [2.0000, 2.9000, -13.8560],
             [-0.9000, 3.8, -9.3260]
         ];
+        /** AO render target size as a fraction of the canvas size. */
+        this.AO_SCALE = 0.5;
         this.aoWidth = 600;
         this.aoHeight = 400;
         this.cameraPositionInterpolator.speed = this.CAMERA_SPEED;
@@ -5089,6 +5113,7 @@ class Renderer extends BaseRenderer {
         this.timers.set(Timers.Fade, 0);
         console.log("Loaded all assets");
         this.initOffscreen();
+        this.initAO();
         this.initVignette();
         (_a = this.readyCallback) === null || _a === void 0 ? void 0 : _a.call(this);
     }
@@ -5096,7 +5121,17 @@ class Renderer extends BaseRenderer {
         if (this.canvas === undefined) {
             return;
         }
+        const oldWidth = this.canvas.width;
+        const oldHeight = this.canvas.height;
         super.resizeCanvas();
+        if (this.canvas.width !== oldWidth || this.canvas.height !== oldHeight) {
+            this.aoWidth = Math.max(1, Math.round(this.canvas.width * this.AO_SCALE));
+            this.aoHeight = Math.max(1, Math.round(this.canvas.height * this.AO_SCALE));
+            // fboAO is only undefined during the very first resize, before initAO() has run for the first time
+            if (this.fboAO !== undefined) {
+                this.initAO();
+            }
+        }
     }
     animate() {
         this.timers.iterate();
@@ -5212,7 +5247,7 @@ class Renderer extends BaseRenderer {
         this.positionCamera(this.timers.get(Timers.Camera));
         this.drawCastleModels(false);
         this.drawWind();
-        this.drawTestDepthMap();
+        this.drawTestFullscreenQuad();
         this.framesCount++;
     }
     drawSsaoPass() {
@@ -5237,9 +5272,10 @@ class Renderer extends BaseRenderer {
         this.gl.uniformMatrix4fv(this.shaderSsao.invProjMatrix, false, this.mInverseProjMatrix);
         this.gl.uniform2f(this.shaderSsao.texelSize, 1 / this.aoWidth, 1 / this.aoHeight);
         this.gl.uniform1f(this.shaderSsao.radius, 24.0);
-        this.gl.uniform1f(this.shaderSsao.depthRange, 50.0);
-        this.gl.uniform1f(this.shaderSsao.bias, 0.05);
-        this.gl.uniform1f(this.shaderSsao.intensity, 2.0);
+        this.gl.uniform1f(this.shaderSsao.depthRange, 30.0);
+        // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "ligher" AO output.
+        this.gl.uniform1f(this.shaderSsao.bias, 0.17);
+        this.gl.uniform1f(this.shaderSsao.intensity, 3.0);
         this.drawVignette(this.shaderSsao);
         this.gl.depthMask(true);
         this.gl.enable(this.gl.DEPTH_TEST);
@@ -5252,13 +5288,12 @@ class Renderer extends BaseRenderer {
             return this.config.lightFov;
         }
     }
-    drawTestDepthMap() {
+    drawTestFullscreenQuad() {
         this.gl.enable(this.gl.CULL_FACE);
         this.gl.cullFace(this.gl.BACK);
         this.gl.disable(this.gl.BLEND);
         this.shaderDiffuse.use();
         this.setTexture2D(0, this.textureAoColor, this.shaderDiffuse.sTexture);
-        // draw full-screen quad with depth map for debug
         this.drawVignette(this.shaderDiffuse);
     }
     drawVignette(shader) {
@@ -5661,6 +5696,15 @@ class Renderer extends BaseRenderer {
         this.fboOffscreen.height = this.SHADOWMAP_SIZE;
         this.fboOffscreen.createGLData(this.SHADOWMAP_SIZE, this.SHADOWMAP_SIZE);
         this.checkGlError("offscreen FBO");
+        console.log("Initialized offscreen FBO.");
+    }
+    initAO() {
+        if (this.textureAoColor !== undefined) {
+            this.gl.deleteTexture(this.textureAoColor);
+        }
+        if (this.textureAoDepth !== undefined) {
+            this.gl.deleteTexture(this.textureAoDepth);
+        }
         this.textureAoColor = TextureUtils.createNpotTexture(this.gl, this.aoWidth, this.aoHeight, false);
         this.textureAoDepth = TextureUtils.createDepthTexture(this.gl, this.aoWidth, this.aoHeight);
         this.fboAO = new FrameBuffer(this.gl);
@@ -5678,7 +5722,7 @@ class Renderer extends BaseRenderer {
         this.fboSsao.height = this.aoHeight;
         this.fboSsao.createGLData(this.aoWidth, this.aoHeight);
         this.checkGlError("SSAO FBO");
-        console.log("Initialized offscreen FBO.");
+        console.log(`Initialized AO FBO. Size: ${this.aoWidth}x${this.aoHeight}, scale: ${this.AO_SCALE}`);
     }
     initVignette() {
         ortho(this.matOrtho, -1, 1, -1, 1, 2.0, 250);
