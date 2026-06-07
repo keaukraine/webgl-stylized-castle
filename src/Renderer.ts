@@ -129,6 +129,10 @@ export class Renderer extends BaseRenderer {
     private textureOffscreenDepth: WebGLTexture | undefined;
     private fboOffscreen: FrameBuffer | undefined;
 
+    private textureAoColor: WebGLTexture | undefined
+    private textureAoDepth: WebGLTexture | undefined;
+    private fboAO: FrameBuffer | undefined;
+
     protected SHADOWMAP_SIZE = 1024 * 2.0; // can be reduced to 1.3 with still OK quality
     protected readonly SHADOWMAP_TEXEL_OFFSET_SCALE = 0.666;
     protected PCF_BIAS_CORRECTION = 1.5 / this.SHADOWMAP_SIZE; // ~1.5 texels
@@ -169,6 +173,9 @@ export class Renderer extends BaseRenderer {
 
     protected orbitControls?: OrbitControls;
     protected freeMovement?: FreeMovement;
+
+    protected aoWidth = 600;
+    protected aoHeight = 400;
 
     constructor() {
         super();
@@ -451,6 +458,19 @@ export class Renderer extends BaseRenderer {
             this.drawCastleModels(true);
         }
 
+        { // draw AO
+            this.gl.colorMask(false, false, false, false);
+            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboAO!.framebufferHandle);
+            this.gl.viewport(0, 0, this.fboAO!.width!, this.fboAO!.height!);
+            this.gl.depthMask(true);
+            this.gl.enable(this.gl.DEPTH_TEST);
+            this.gl.clear(this.gl.DEPTH_BUFFER_BIT);
+            this.setCameraFOV(1.0);
+            this.positionCamera(this.timers.get(Timers.Camera));
+            this.drawCastleModels(true);
+        }
+
+
         this.gl.colorMask(true, true, true, true);
         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null); // This differs from OpenGL ES
         this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
@@ -462,7 +482,7 @@ export class Renderer extends BaseRenderer {
         this.drawCastleModels(false);
         this.drawWind();
 
-        // this.drawDepthMap();
+        this.drawTestDepthMap();
 
         this.framesCount++;
     }
@@ -475,14 +495,14 @@ export class Renderer extends BaseRenderer {
         }
     }
 
-    drawDepthMap() {
+    drawTestDepthMap() {
         this.gl.enable(this.gl.CULL_FACE);
         this.gl.cullFace(this.gl.BACK);
         this.gl.disable(this.gl.BLEND);
 
         this.shaderDiffuse!.use();
 
-        this.setTexture2D(0, this.textureOffscreenDepth!, this.shaderDiffuse!.sTexture!);
+        this.setTexture2D(0, this.textureAoDepth!, this.shaderDiffuse!.sTexture!);
         this.drawVignette(this.shaderDiffuse!);
     }
 
@@ -1107,6 +1127,16 @@ export class Renderer extends BaseRenderer {
         this.fboOffscreen.height = this.SHADOWMAP_SIZE;
         this.fboOffscreen.createGLData(this.SHADOWMAP_SIZE, this.SHADOWMAP_SIZE);
         this.checkGlError("offscreen FBO");
+
+        this.textureAoColor = TextureUtils.createNpotTexture(this.gl, this.aoWidth, this.aoHeight, false)!;
+        this.textureAoDepth = TextureUtils.createDepthTexture(this.gl as WebGL2RenderingContext, this.aoWidth, this.aoHeight)!;
+        this.fboAO = new FrameBuffer(this.gl);
+        this.fboAO.textureHandle = this.textureAoColor;
+        this.fboAO.depthTextureHandle = this.textureAoDepth;
+        this.fboAO.width = this.aoWidth;
+        this.fboAO.height = this.aoHeight;
+        this.fboAO.createGLData(this.aoWidth, this.aoHeight);
+        this.checkGlError("AO FBO");
 
         console.log("Initialized offscreen FBO.");
     }

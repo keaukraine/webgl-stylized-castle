@@ -1,3 +1,5 @@
+
+(function(l, r) { if (l.getElementById('livereloadscript')) return; r = l.createElement('script'); r.async = 1; r.src = '//' + (window.location.host || 'localhost').split(':')[0] + ':35729/livereload.js?snipver=1'; r.id = 'livereloadscript'; l.getElementsByTagName('head')[0].appendChild(r) })(window.document);
 class FullScreenUtils {
     /** Enters fullscreen. */
     enterFullScreen() {
@@ -1521,6 +1523,10 @@ class BaseRenderer {
     getViewMatrix() {
         return this.mVMatrix;
     }
+    /** @inheritdoc */
+    getProjectionMatrix() {
+        return this.mProjMatrix;
+    }
 }
 
 class FrameBuffer {
@@ -1667,6 +1673,9 @@ class TextureUtils {
     }
 }
 
+/**
+ * Simple shader using one texture.
+ */
 class DiffuseShader extends BaseShader {
     /** @inheritdoc */
     fillCode() {
@@ -1695,7 +1704,7 @@ class DiffuseShader extends BaseShader {
         this.sTexture = this.getUniform('sTexture');
     }
     /** @inheritdoc */
-    drawModel(renderer, model, tx, ty, tz, rx, ry, rz, sx, sy, sz) {
+    drawModel(renderer, model, tx, ty, tz, rx, ry, rz, sx, sy, sz, attribs) {
         if (this.rm_Vertex === undefined || this.rm_TexCoord0 === undefined || this.view_proj_matrix === undefined) {
             return;
         }
@@ -1703,8 +1712,15 @@ class DiffuseShader extends BaseShader {
         model.bindBuffers(gl);
         gl.enableVertexAttribArray(this.rm_Vertex);
         gl.enableVertexAttribArray(this.rm_TexCoord0);
-        gl.vertexAttribPointer(this.rm_Vertex, 3, gl.FLOAT, false, 4 * (3 + 2), 0);
-        gl.vertexAttribPointer(this.rm_TexCoord0, 2, gl.FLOAT, false, 4 * (3 + 2), 4 * 3);
+        if (attribs) {
+            for (const [key, value] of attribs) {
+                gl.vertexAttribPointer(key, ...value);
+            }
+        }
+        else {
+            gl.vertexAttribPointer(this.rm_Vertex, 3, gl.FLOAT, false, 4 * (3 + 2), 0);
+            gl.vertexAttribPointer(this.rm_TexCoord0, 2, gl.FLOAT, false, 4 * (3 + 2), 4 * 3);
+        }
         renderer.calculateMVPMatrix(tx, ty, tz, rx, ry, rz, sx, sy, sz);
         gl.uniformMatrix4fv(this.view_proj_matrix, false, renderer.getMVPMatrix());
         gl.drawElements(gl.TRIANGLES, model.getNumIndices() * 3, gl.UNSIGNED_SHORT, 0);
@@ -4494,6 +4510,38 @@ class OrbitControls {
  * This type of camera is good for displaying large scenes
  */
 class FpsCamera {
+    get angles() {
+        return this._angles;
+    }
+    set angles(value) {
+        this._angles = value;
+        this._dirty = true;
+    }
+    get position() {
+        return this._position;
+    }
+    set position(value) {
+        this._position = value;
+        this._dirty = true;
+    }
+    get dirty() {
+        return this._dirty;
+    }
+    set dirty(value) {
+        this._dirty = value;
+    }
+    get viewMat() {
+        if (this._dirty) {
+            var mv = this._viewMat;
+            identity(mv);
+            rotateX(mv, mv, this.angles[0] - Math.PI / 2.0);
+            rotateZ$1(mv, mv, this.angles[1]);
+            rotateY$1(mv, mv, this.angles[2]);
+            translate(mv, mv, [-this.position[0], -this.position[1], -this.position[2]]);
+            this._dirty = false;
+        }
+        return this._viewMat;
+    }
     constructor(options) {
         var _a, _b;
         this.options = options;
@@ -4548,38 +4596,6 @@ class FpsCamera {
             }
         });
         this.canvas.addEventListener('mouseup', event => moving = false);
-    }
-    get angles() {
-        return this._angles;
-    }
-    set angles(value) {
-        this._angles = value;
-        this._dirty = true;
-    }
-    get position() {
-        return this._position;
-    }
-    set position(value) {
-        this._position = value;
-        this._dirty = true;
-    }
-    get dirty() {
-        return this._dirty;
-    }
-    set dirty(value) {
-        this._dirty = value;
-    }
-    get viewMat() {
-        if (this._dirty) {
-            var mv = this._viewMat;
-            identity(mv);
-            rotateX(mv, mv, this.angles[0] - Math.PI / 2.0);
-            rotateZ$1(mv, mv, this.angles[1]);
-            rotateY$1(mv, mv, this.angles[2]);
-            translate(mv, mv, [-this.position[0], -this.position[1], -this.position[2]]);
-            this._dirty = false;
-        }
-        return this._viewMat;
     }
     update(frameTime) {
         this.vec3Temp1[0] = 0;
@@ -4805,6 +4821,8 @@ class Renderer extends BaseRenderer {
             [2.0000, 2.9000, -13.8560],
             [-0.9000, 3.8, -9.3260]
         ];
+        this.aoWidth = 600;
+        this.aoHeight = 400;
         this.cameraPositionInterpolator.speed = this.CAMERA_SPEED;
         this.cameraPositionInterpolator.minDuration = this.CAMERA_MIN_DURATION;
         this.randomizeCamera();
@@ -5044,6 +5062,17 @@ class Renderer extends BaseRenderer {
             this.positionCameraLight(this.currentLightDirection);
             this.drawCastleModels(true);
         }
+        { // draw AO
+            this.gl.colorMask(false, false, false, false);
+            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboAO.framebufferHandle);
+            this.gl.viewport(0, 0, this.fboAO.width, this.fboAO.height);
+            this.gl.depthMask(true);
+            this.gl.enable(this.gl.DEPTH_TEST);
+            this.gl.clear(this.gl.DEPTH_BUFFER_BIT);
+            this.setCameraFOV(1.0);
+            this.positionCamera(this.timers.get(Timers.Camera));
+            this.drawCastleModels(true);
+        }
         this.gl.colorMask(true, true, true, true);
         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null); // This differs from OpenGL ES
         this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
@@ -5052,7 +5081,7 @@ class Renderer extends BaseRenderer {
         this.positionCamera(this.timers.get(Timers.Camera));
         this.drawCastleModels(false);
         this.drawWind();
-        // this.drawDepthMap();
+        this.drawTestDepthMap();
         this.framesCount++;
     }
     getLightFov() {
@@ -5063,12 +5092,12 @@ class Renderer extends BaseRenderer {
             return this.config.lightFov;
         }
     }
-    drawDepthMap() {
+    drawTestDepthMap() {
         this.gl.enable(this.gl.CULL_FACE);
         this.gl.cullFace(this.gl.BACK);
         this.gl.disable(this.gl.BLEND);
         this.shaderDiffuse.use();
-        this.setTexture2D(0, this.textureOffscreenDepth, this.shaderDiffuse.sTexture);
+        this.setTexture2D(0, this.textureAoDepth, this.shaderDiffuse.sTexture);
         this.drawVignette(this.shaderDiffuse);
     }
     drawVignette(shader) {
@@ -5471,6 +5500,15 @@ class Renderer extends BaseRenderer {
         this.fboOffscreen.height = this.SHADOWMAP_SIZE;
         this.fboOffscreen.createGLData(this.SHADOWMAP_SIZE, this.SHADOWMAP_SIZE);
         this.checkGlError("offscreen FBO");
+        this.textureAoColor = TextureUtils.createNpotTexture(this.gl, this.aoWidth, this.aoHeight, false);
+        this.textureAoDepth = TextureUtils.createDepthTexture(this.gl, this.aoWidth, this.aoHeight);
+        this.fboAO = new FrameBuffer(this.gl);
+        this.fboAO.textureHandle = this.textureAoColor;
+        this.fboAO.depthTextureHandle = this.textureAoDepth;
+        this.fboAO.width = this.aoWidth;
+        this.fboAO.height = this.aoHeight;
+        this.fboAO.createGLData(this.aoWidth, this.aoHeight);
+        this.checkGlError("AO FBO");
         console.log("Initialized offscreen FBO.");
     }
     initVignette() {

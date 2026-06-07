@@ -79,6 +79,9 @@ export declare class Renderer extends BaseRenderer {
     private textureOffscreenColor;
     private textureOffscreenDepth;
     private fboOffscreen;
+    private textureAoColor;
+    private textureAoDepth;
+    private fboAO;
     protected SHADOWMAP_SIZE: number;
     protected readonly SHADOWMAP_TEXEL_OFFSET_SCALE = 0.666;
     protected PCF_BIAS_CORRECTION: number;
@@ -101,6 +104,8 @@ export declare class Renderer extends BaseRenderer {
     protected readonly smallFlags3: number[][];
     protected orbitControls?: OrbitControls;
     protected freeMovement?: FreeMovement;
+    protected aoWidth: number;
+    protected aoHeight: number;
     constructor();
     protected setupTimers(): void;
     setCustomCamera(camera: mat4 | undefined, position?: vec3, rotation?: vec3): void;
@@ -124,7 +129,7 @@ export declare class Renderer extends BaseRenderer {
     /** Issues actual draw calls */
     drawScene(): void;
     getLightFov(): number;
-    drawDepthMap(): void;
+    drawTestDepthMap(): void;
     protected drawVignette(shader: DiffuseShader): void;
     private drawCastleModels;
     private drawKnights;
