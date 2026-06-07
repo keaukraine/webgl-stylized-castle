@@ -16,6 +16,7 @@ import { EagleDepthShader } from "./shaders/EagleDepthShader";
 import { CameraPositionInterpolator } from "./CameraPositionInterpolator";
 import { AMBIENT, BASE_COLORS, CASTLE_INNER_COLORS, CASTLE_OUTER_COLORS, GROUND_COLORS } from "./Colors";
 import { WindShader } from "./shaders/WindShader";
+import { SsaoShader } from "./shaders/SsaoShader";
 import { SPLINE_WALL_INNER_1, SPLINE_WALL_INNER_2, SPLINE_WALL_INNER_3, SPLINE_WALL_INNER_4, SPLINE_WALL_INNER_5, SPLINE_WALL_INNER_6 } from "./Splines";
 import { CAMERAS, CAMERA_FOV_COEFFS } from "./Cameras";
 import { TimersMap } from "./TimersMap";
@@ -48,6 +49,7 @@ export class Renderer extends BaseRenderer {
     private textureEagle: WebGLTexture | undefined;
 
     private shaderDiffuse: DiffuseShader | undefined;
+    private shaderSsao: SsaoShader | undefined;
 
     private shaderObjects: VertexColorSmShader | undefined;
     private shaderObjectsDepth: VertexColorDepthShader | undefined;
@@ -132,6 +134,8 @@ export class Renderer extends BaseRenderer {
     private textureAoColor: WebGLTexture | undefined
     private textureAoDepth: WebGLTexture | undefined;
     private fboAO: FrameBuffer | undefined;
+    /** Renders into `textureAoColor` without `textureAoDepth` attached, so the depth map can be sampled without forming a feedback loop. */
+    private fboSsao: FrameBuffer | undefined;
 
     protected SHADOWMAP_SIZE = 1024 * 2.0; // can be reduced to 1.3 with still OK quality
     protected readonly SHADOWMAP_TEXEL_OFFSET_SCALE = 0.666;
@@ -291,6 +295,7 @@ export class Renderer extends BaseRenderer {
         this.shaderEagle = new EagleAnimatedShader(this.gl);
         this.shaderEagleDepth = new EagleDepthShader(this.gl);
         this.shaderWind = new WindShader(this.gl);
+        this.shaderSsao = new SsaoShader(this.gl);
     }
 
     async loadData(): Promise<void> {
@@ -470,6 +475,8 @@ export class Renderer extends BaseRenderer {
             this.drawCastleModels(true);
         }
 
+        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboSsao!.framebufferHandle);
+        this.gl.viewport(0, 0, this.fboSsao!.width!, this.fboSsao!.height!);
         this.drawSsaoPass();
 
         this.gl.colorMask(true, true, true, true);
@@ -489,7 +496,37 @@ export class Renderer extends BaseRenderer {
     }
 
     drawSsaoPass() {
-        // TODO: not implemented yet, but here we would use the depth map rendered in AO pass
+        if (this.shaderSsao === undefined) {
+            return;
+        }
+
+        // Full-screen quad pass: estimate AO from the depth map rendered in the AO depth pass
+        // and store the result in textureAoColor. Rendered into fboSsao (not fboAO) because
+        // textureAoDepth must not be attached to the framebuffer while it's being sampled.
+        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboSsao!.framebufferHandle);
+        this.gl.viewport(0, 0, this.fboSsao!.width!, this.fboSsao!.height!);
+
+        this.gl.disable(this.gl.CULL_FACE);
+        this.gl.disable(this.gl.BLEND);
+        this.gl.disable(this.gl.DEPTH_TEST);
+        this.gl.depthMask(false);
+        this.gl.colorMask(true, true, true, true);
+
+        this.shaderSsao.use();
+
+        this.setTexture2D(0, this.textureAoDepth!, this.shaderSsao.sDepth!);
+        this.gl.uniform2f(this.shaderSsao.texelSize!, 1 / this.aoWidth, 1 / this.aoHeight);
+        this.gl.uniform1f(this.shaderSsao.zNear!, this.Z_NEAR);
+        this.gl.uniform1f(this.shaderSsao.zFar!, this.Z_FAR);
+        this.gl.uniform1f(this.shaderSsao.radius!, 24.0);
+        this.gl.uniform1f(this.shaderSsao.depthRange!, 50.0);
+        this.gl.uniform1f(this.shaderSsao.bias!, 0.5);
+        this.gl.uniform1f(this.shaderSsao.intensity!, 1.5);
+
+        this.drawVignette(this.shaderSsao);
+
+        this.gl.depthMask(true);
+        this.gl.enable(this.gl.DEPTH_TEST);
     }
 
     getLightFov(): number {
@@ -507,12 +544,12 @@ export class Renderer extends BaseRenderer {
 
         this.shaderDiffuse!.use();
 
-        this.setTexture2D(0, this.textureAoDepth!, this.shaderDiffuse!.sTexture!);
+        this.setTexture2D(0, this.textureAoColor!, this.shaderDiffuse!.sTexture!);
         // draw full-screen quad with depth map for debug
         this.drawVignette(this.shaderDiffuse!);
     }
 
-    protected drawVignette(shader: DiffuseShader) {
+    protected drawVignette(shader: { rm_Vertex: number | undefined; rm_TexCoord0: number | undefined; view_proj_matrix: WebGLUniformLocation | undefined }) {
         this.unbindBuffers();
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.mTriangleVerticesVignette!);
 
@@ -1143,6 +1180,15 @@ export class Renderer extends BaseRenderer {
         this.fboAO.height = this.aoHeight;
         this.fboAO.createGLData(this.aoWidth, this.aoHeight);
         this.checkGlError("AO FBO");
+
+        // Separate FBO sharing the same color texture, but without textureAoDepth attached:
+        // needed to sample the depth map in the SSAO pass without forming a feedback loop.
+        this.fboSsao = new FrameBuffer(this.gl);
+        this.fboSsao.textureHandle = this.textureAoColor;
+        this.fboSsao.width = this.aoWidth;
+        this.fboSsao.height = this.aoHeight;
+        this.fboSsao.createGLData(this.aoWidth, this.aoHeight);
+        this.checkGlError("SSAO FBO");
 
         console.log("Initialized offscreen FBO.");
     }

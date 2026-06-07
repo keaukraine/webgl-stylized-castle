@@ -1,4 +1,4 @@
-import { BaseRenderer, DiffuseShader } from "webgl-framework";
+import { BaseRenderer } from "webgl-framework";
 import { mat4, vec3 } from "gl-matrix";
 import { CameraMode } from "./CameraMode";
 import { IShadowShader } from "./shaders/IShadowShader";
@@ -18,6 +18,7 @@ export declare class Renderer extends BaseRenderer {
     private textureKnight;
     private textureEagle;
     private shaderDiffuse;
+    private shaderSsao;
     private shaderObjects;
     private shaderObjectsDepth;
     private shaderFlag;
@@ -82,6 +83,8 @@ export declare class Renderer extends BaseRenderer {
     private textureAoColor;
     private textureAoDepth;
     private fboAO;
+    /** Renders into `textureAoColor` without `textureAoDepth` attached, so the depth map can be sampled without forming a feedback loop. */
+    private fboSsao;
     protected SHADOWMAP_SIZE: number;
     protected readonly SHADOWMAP_TEXEL_OFFSET_SCALE = 0.666;
     protected PCF_BIAS_CORRECTION: number;
@@ -131,7 +134,11 @@ export declare class Renderer extends BaseRenderer {
     drawSsaoPass(): void;
     getLightFov(): number;
     drawTestDepthMap(): void;
-    protected drawVignette(shader: DiffuseShader): void;
+    protected drawVignette(shader: {
+        rm_Vertex: number | undefined;
+        rm_TexCoord0: number | undefined;
+        view_proj_matrix: WebGLUniformLocation | undefined;
+    }): void;
     private drawCastleModels;
     private drawKnights;
     private drawWind;
