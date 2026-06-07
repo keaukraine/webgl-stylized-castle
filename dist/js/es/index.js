@@ -5062,7 +5062,7 @@ class Renderer extends BaseRenderer {
             this.positionCameraLight(this.currentLightDirection);
             this.drawCastleModels(true);
         }
-        { // draw AO
+        { // AO depth pass
             this.gl.colorMask(false, false, false, false);
             this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboAO.framebufferHandle);
             this.gl.viewport(0, 0, this.fboAO.width, this.fboAO.height);
@@ -5073,6 +5073,7 @@ class Renderer extends BaseRenderer {
             this.positionCamera(this.timers.get(Timers.Camera));
             this.drawCastleModels(true);
         }
+        this.drawSsaoPass();
         this.gl.colorMask(true, true, true, true);
         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null); // This differs from OpenGL ES
         this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
@@ -5083,6 +5084,9 @@ class Renderer extends BaseRenderer {
         this.drawWind();
         this.drawTestDepthMap();
         this.framesCount++;
+    }
+    drawSsaoPass() {
+        // TODO: not implemented yet, but here we would use the depth map rendered in AO pass
     }
     getLightFov() {
         if (this.cameraMode === CameraMode.Random) {
@@ -5098,6 +5102,7 @@ class Renderer extends BaseRenderer {
         this.gl.disable(this.gl.BLEND);
         this.shaderDiffuse.use();
         this.setTexture2D(0, this.textureAoDepth, this.shaderDiffuse.sTexture);
+        // draw full-screen quad with depth map for debug
         this.drawVignette(this.shaderDiffuse);
     }
     drawVignette(shader) {

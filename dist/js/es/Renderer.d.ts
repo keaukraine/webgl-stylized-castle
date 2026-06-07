@@ -128,6 +128,7 @@ export declare class Renderer extends BaseRenderer {
     private positionCameraLight;
     /** Issues actual draw calls */
     drawScene(): void;
+    drawSsaoPass(): void;
     getLightFov(): number;
     drawTestDepthMap(): void;
     protected drawVignette(shader: DiffuseShader): void;
