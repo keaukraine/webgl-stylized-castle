@@ -92,6 +92,7 @@ export declare class Renderer extends BaseRenderer {
     private mTriangleVerticesVignette;
     private mViewMatrixLight;
     private mProjMatrixLight;
+    private mInverseProjMatrix;
     protected pointLight: vec3;
     private cameraPositionInterpolator;
     private readonly CAMERA_SPEED;

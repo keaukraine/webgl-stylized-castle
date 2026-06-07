@@ -146,6 +146,7 @@ export class Renderer extends BaseRenderer {
 
     private mViewMatrixLight = mat4.create();
     private mProjMatrixLight = mat4.create();
+    private mInverseProjMatrix = mat4.create();
     protected pointLight = vec3.create();
 
     private cameraPositionInterpolator = new CameraPositionInterpolator();
@@ -514,14 +515,17 @@ export class Renderer extends BaseRenderer {
 
         this.shaderSsao.use();
 
+        // textureAoDepth was rendered with the same projection as the main camera (setCameraFOV(1.0)
+        // is called identically in both passes), so its inverse lets us reconstruct view-space position
+        mat4.invert(this.mInverseProjMatrix, this.mProjMatrix);
+
         this.setTexture2D(0, this.textureAoDepth!, this.shaderSsao.sDepth!);
+        this.gl.uniformMatrix4fv(this.shaderSsao.invProjMatrix!, false, this.mInverseProjMatrix);
         this.gl.uniform2f(this.shaderSsao.texelSize!, 1 / this.aoWidth, 1 / this.aoHeight);
-        this.gl.uniform1f(this.shaderSsao.zNear!, this.Z_NEAR);
-        this.gl.uniform1f(this.shaderSsao.zFar!, this.Z_FAR);
         this.gl.uniform1f(this.shaderSsao.radius!, 24.0);
         this.gl.uniform1f(this.shaderSsao.depthRange!, 50.0);
-        this.gl.uniform1f(this.shaderSsao.bias!, 0.5);
-        this.gl.uniform1f(this.shaderSsao.intensity!, 1.5);
+        this.gl.uniform1f(this.shaderSsao.bias!, 0.05);
+        this.gl.uniform1f(this.shaderSsao.intensity!, 2.0);
 
         this.drawVignette(this.shaderSsao);
 
