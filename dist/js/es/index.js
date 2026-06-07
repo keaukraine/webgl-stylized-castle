@@ -1618,6 +1618,125 @@ class FrameBuffer {
     }
 }
 
+class MsaaFrameBuffer {
+    /** Constructor. */
+    constructor(gl) {
+        this.gl = gl;
+        this.m_textureHandle = null;
+        this.m_depthTextureHandle = null;
+        this.m_framebufferHandle = null;
+        this.m_framebufferMsaaHandle = null;
+        this.m_depthBufferHandle = null;
+        this.m_depthBufferMsaaHandle = null;
+        this.m_colorBufferHandle = null;
+    }
+    /** Creates OpenGL objects */
+    createGLData(width, height, useAlpha) {
+        this.m_width = width;
+        this.m_height = height;
+        if (this.m_textureHandle !== null && this.m_width > 0 && this.m_height > 0) {
+            this.m_framebufferHandle = this.gl.createFramebuffer(); // alternative to GLES20.glGenFramebuffers()
+            if (this.m_textureHandle !== null) {
+                this.gl.bindTexture(this.gl.TEXTURE_2D, this.m_textureHandle);
+                this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.m_framebufferHandle);
+                this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.m_textureHandle, 0);
+                this.checkGlError("FB");
+            }
+            if (this.m_depthTextureHandle === null) {
+                this.m_depthBufferHandle = this.gl.createRenderbuffer();
+                this.gl.bindRenderbuffer(this.gl.RENDERBUFFER, this.m_depthBufferHandle);
+                this.checkGlError("FB - glBindRenderbuffer");
+                this.gl.renderbufferStorage(this.gl.RENDERBUFFER, this.gl.DEPTH_COMPONENT16, this.m_width, this.m_height);
+                // this.gl.renderbufferStorageMultisample(this.gl.RENDERBUFFER, 4, this.gl.DEPTH_COMPONENT16, this.m_width, this.m_height);
+                this.checkGlError("FB - glRenderbufferStorage");
+                // this.gl.framebufferRenderbuffer(this.gl.FRAMEBUFFER, this.gl.DEPTH_ATTACHMENT, this.gl.RENDERBUFFER, this.m_depthbufferHandle);
+                this.gl.framebufferRenderbuffer(this.gl.FRAMEBUFFER, this.gl.DEPTH_ATTACHMENT, this.gl.RENDERBUFFER, this.m_depthBufferHandle);
+                this.checkGlError("FB - glFramebufferRenderbuffer");
+            }
+            else {
+                this.gl.bindTexture(this.gl.TEXTURE_2D, this.m_depthTextureHandle);
+                this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.m_framebufferHandle);
+                this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.DEPTH_ATTACHMENT, this.gl.TEXTURE_2D, this.m_depthTextureHandle, 0);
+                this.checkGlError("FB depth");
+            }
+            const result = this.gl.checkFramebufferStatus(this.gl.FRAMEBUFFER);
+            if (result != this.gl.FRAMEBUFFER_COMPLETE) {
+                console.error(`Error creating framebufer: ${result}`);
+            }
+            this.gl.bindRenderbuffer(this.gl.RENDERBUFFER, null);
+            // this.gl.bindTexture(this.gl.TEXTURE_2D, 0);
+            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+            this.m_depthBufferMsaaHandle = this.gl.createRenderbuffer();
+            this.m_framebufferMsaaHandle = this.gl.createFramebuffer(); // alternative to GLES20.glGenFramebuffers()
+            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.m_framebufferMsaaHandle);
+            this.m_colorBufferHandle = this.gl.createRenderbuffer();
+            this.gl.bindRenderbuffer(this.gl.RENDERBUFFER, this.m_colorBufferHandle);
+            this.gl.renderbufferStorageMultisample(this.gl.RENDERBUFFER, 4, useAlpha ? this.gl.RGBA8 : this.gl.RGB8, this.m_width, this.m_height);
+            this.gl.framebufferRenderbuffer(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.RENDERBUFFER, this.m_colorBufferHandle);
+            this.gl.bindRenderbuffer(this.gl.RENDERBUFFER, this.m_depthBufferMsaaHandle);
+            // this.gl.renderbufferStorage(this.gl.RENDERBUFFER, this.gl.DEPTH_COMPONENT16, this.m_width, this.m_height);
+            this.gl.renderbufferStorageMultisample(this.gl.RENDERBUFFER, 4, this.gl.DEPTH_COMPONENT16, this.m_width, this.m_height);
+            this.checkGlError("FB - glRenderbufferStorage");
+            this.gl.framebufferRenderbuffer(this.gl.FRAMEBUFFER, this.gl.DEPTH_ATTACHMENT, this.gl.RENDERBUFFER, this.m_depthBufferMsaaHandle);
+            const result2 = this.gl.checkFramebufferStatus(this.gl.FRAMEBUFFER);
+            if (result2 != this.gl.FRAMEBUFFER_COMPLETE) {
+                console.error(`Error creating MSAA framebufer: ${result2}`);
+            }
+            this.gl.bindRenderbuffer(this.gl.RENDERBUFFER, null);
+            // this.gl.bindTexture(this.gl.TEXTURE_2D, 0);
+            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+        }
+    }
+    checkGlError(op) {
+        let error;
+        while ((error = this.gl.getError()) !== this.gl.NO_ERROR) {
+            console.error(`${op}: glError ${error}`);
+        }
+    }
+    get width() {
+        return this.m_width;
+    }
+    set width(value) {
+        this.m_width = value;
+    }
+    get height() {
+        return this.m_height;
+    }
+    set height(value) {
+        this.m_height = value;
+    }
+    get textureHandle() {
+        return this.m_textureHandle;
+    }
+    set textureHandle(value) {
+        this.m_textureHandle = value;
+    }
+    get depthbufferHandle() {
+        return this.m_depthBufferHandle;
+    }
+    set depthbufferHandle(value) {
+        this.m_depthBufferHandle = value;
+    }
+    get framebufferHandle() {
+        return this.m_framebufferHandle;
+    }
+    set framebufferHandle(value) {
+        this.m_framebufferHandle = value;
+    }
+    get depthTextureHandle() {
+        return this.m_depthTextureHandle;
+    }
+    set depthTextureHandle(value) {
+        this.m_depthTextureHandle = value;
+    }
+    get colorBufferHandle() {
+        return this.m_colorBufferHandle;
+    }
+    get framebufferMsaaHandle() {
+        return this.m_framebufferMsaaHandle;
+    }
+}
+
 /** Utilities to create various textures. */
 class TextureUtils {
     /**
@@ -2128,9 +2247,7 @@ function getTranslation(out, mat) {
   return out;
 }
 /**
- * Generates a orthogonal projection matrix with the given bounds.
- * The near/far clip planes correspond to a normalized device coordinate Z range of [-1, 1],
- * which matches WebGL/OpenGL's clip volume.
+ * Generates a orthogonal projection matrix with the given bounds
  *
  * @param {mat4} out mat4 frustum matrix will be written into
  * @param {number} left Left bound of the frustum
@@ -2142,7 +2259,7 @@ function getTranslation(out, mat) {
  * @returns {mat4} out
  */
 
-function orthoNO(out, left, right, bottom, top, near, far) {
+function ortho(out, left, right, bottom, top, near, far) {
   var lr = 1 / (left - right);
   var bt = 1 / (bottom - top);
   var nf = 1 / (near - far);
@@ -2164,12 +2281,6 @@ function orthoNO(out, left, right, bottom, top, near, far) {
   out[15] = 1;
   return out;
 }
-/**
- * Alias for {@link mat4.orthoNO}
- * @function
- */
-
-var ortho = orthoNO;
 /**
  * Generates a look-at matrix with the given eye position, focal point, and up axis.
  * If you want a matrix that actually makes an object look at another object, you should use targetTo instead.
@@ -3910,7 +4021,7 @@ class SsaoShader extends BaseShader {
 
             ${ShaderCommonFunctions.RANDOM}
 
-            const int SAMPLES = 82;
+            const int SAMPLES = 4;
             const float GOLDEN_ANGLE = 2.39996323; // ~137.5 degrees, gives a well distributed spiral
 
             // Reconstructs view-space position from a depth buffer sample at the given UV
@@ -4016,6 +4127,294 @@ class SsaoShader extends BaseShader {
         this.intensity = this.getUniform("intensity");
         this.rm_Vertex = this.getAttrib("rm_Vertex");
         this.rm_TexCoord0 = this.getAttrib("rm_TexCoord0");
+    }
+}
+
+/**
+ * Gaussian blur shader.
+ * Uses default blur radius of 5 pixels.
+ */
+class GaussianBlurShader extends BaseShader {
+    getKernel() {
+        return `const int SAMPLE_COUNT = 6;
+const float OFFSETS[6] = float[6](
+    -4.455269417428358,
+    -2.4751038298192056,
+    -0.4950160492928827,
+    1.485055021558738,
+    3.465172537482815,
+    5.0
+);
+const float WEIGHTS[6] = float[6](
+    0.14587920530480702,
+    0.19230308352110734,
+    0.21647621943673803,
+    0.20809835496561988,
+    0.17082879595769634,
+    0.06641434081403137
+);`;
+    }
+    /** @inheritdoc */
+    fillCode() {
+        this.vertexShaderCode = `#version 300 es
+            precision highp float;
+            out vec2 vTextureCoord;
+
+            const vec2 vertices[4] = vec2[4](
+              vec2(-1.0f, -1.0f),
+              vec2( 1.0f, -1.0f),
+              vec2(-1.0f,  1.0f),
+              vec2( 1.0f,  1.0f)
+            );
+            const vec2 uvs[4] = vec2[4](
+              vec2(0.0f, 0.0f),
+              vec2(1.0f, 0.0f),
+              vec2(0.0f, 1.0f),
+              vec2(1.0f, 1.0f)
+            );
+
+            void main() {
+              gl_Position = vec4(vertices[gl_VertexID], 0.0f, 1.0f);
+              vTextureCoord = uvs[gl_VertexID];
+            }`;
+        this.fragmentShaderCode = `#version 300 es
+            precision highp float;
+
+            ${this.getKernel()}
+
+            // blurDirection is:
+            //     vec2(1,0) for horizontal pass
+            //     vec2(0,1) for vertical pass
+            // The sourceTexture to be blurred MUST use linear filtering!
+            // pixelCoord is in [0..1]
+            mediump vec4 blur(in sampler2D sourceTexture, vec2 blurDirection, vec2 pixelCoord)
+            {
+                mediump vec4 result = vec4(0.0);
+                vec2 size = vec2(textureSize(sourceTexture, 0));
+                for (int i = 0; i < SAMPLE_COUNT; ++i)
+                {
+                    vec2 offset = blurDirection * OFFSETS[i] / size;
+                    float weight = WEIGHTS[i];
+                    result += texture(sourceTexture, pixelCoord + offset) * weight;
+                }
+                return result;
+            }
+
+            in vec2 vTextureCoord;
+            uniform sampler2D sTexture;
+            uniform vec2 direction;
+            uniform mediump float brightness;
+            out mediump vec4 fragColor;
+
+            void main() {
+                fragColor = blur(sTexture, direction, vTextureCoord);
+                fragColor *= brightness;
+            }`;
+    }
+    /** @inheritdoc */
+    fillUniformsAttributes() {
+        this.sTexture = this.getUniform("sTexture");
+        this.brightness = this.getUniform("brightness");
+        this.direction = this.getUniform("direction");
+    }
+}
+
+/**
+ * Gaussian blur shader.
+ * Uses blur radius of 4 pixels.
+ */
+class GaussianBlurShader4 extends GaussianBlurShader {
+    getKernel() {
+        return `const int SAMPLE_COUNT = 5;
+const float OFFSETS[5] = float[5](
+    -3.4048471718931532,
+    -1.4588111840004858,
+    0.48624268466894843,
+    2.431625915613778,
+    4.
+);
+const float WEIGHTS[5] = float[5](
+    0.15642123799829394,
+    0.26718801880015064,
+    0.29738065394682034,
+    0.21568339342709997,
+    0.06332669582763516
+);`;
+    }
+}
+
+/**
+ * Gaussian blur shader.
+ * Uses blur radius of 3 pixels.
+ */
+class GaussianBlurShader3 extends GaussianBlurShader {
+    getKernel() {
+        return `const int SAMPLE_COUNT = 4;
+const float OFFSETS[4] = float[4](
+    -2.431625915613778,
+    -0.4862426846689484,
+    1.4588111840004858,
+    3.
+);
+const float WEIGHTS[4] = float[4](
+    0.24696196374528634,
+    0.34050702333458593,
+    0.30593582919679174,
+    0.10659518372333592
+);`;
+    }
+}
+
+/**
+ * Gaussian blur shader.
+ * Uses blur radius of 3 pixels.
+ */
+class GaussianBlurShader2 extends GaussianBlurShader {
+    getKernel() {
+        return `const int SAMPLE_COUNT = 3;
+const float OFFSETS[3] = float[3](
+    -1.4588111840004858,
+    0.48624268466894843,
+    2.
+);
+const float WEIGHTS[3] = float[3](
+    0.38883081312055,
+    0.43276926113573877,
+    0.17839992574371122
+);`;
+    }
+}
+
+/**
+ * Gaussian blur kernel size.
+ */
+var BlurSize;
+(function (BlurSize) {
+    BlurSize[BlurSize["KERNEL_5"] = 0] = "KERNEL_5";
+    BlurSize[BlurSize["KERNEL_4"] = 1] = "KERNEL_4";
+    BlurSize[BlurSize["KERNEL_3"] = 2] = "KERNEL_3";
+    BlurSize[BlurSize["KERNEL_2"] = 3] = "KERNEL_2";
+})(BlurSize || (BlurSize = {}));
+/**
+ * Helper class to render and blur off-screen targets.
+ */
+class GaussianBlurRenderPass {
+    constructor(gl, size) {
+        this.gl = gl;
+        this.width = 0;
+        this.height = 0;
+        const { width, height, minSize, ratio } = size;
+        if (width !== undefined && height !== undefined) {
+            this.width = width;
+            this.height = height;
+        }
+        else if (minSize !== undefined && ratio !== undefined) {
+            this.width = ratio > 1 ? Math.round(minSize * ratio) : minSize;
+            this.height = ratio > 1 ? minSize : Math.round(minSize / ratio);
+        }
+        this.blurShader5 = new GaussianBlurShader(gl);
+        this.blurShader4 = new GaussianBlurShader4(gl);
+        this.blurShader3 = new GaussianBlurShader3(gl);
+        this.blurShader2 = new GaussianBlurShader2(gl);
+        this.textureOffscreen = TextureUtils.createNpotTexture(gl, this.width, this.height, false);
+        this.fboOffscreen = new FrameBuffer(gl);
+        this.fboOffscreen.textureHandle = this.textureOffscreen;
+        this.fboOffscreen.width = this.width;
+        this.fboOffscreen.height = this.height;
+        this.fboOffscreen.createGLData(this.width, this.height);
+        this.textureOffscreenMsaa = TextureUtils.createNpotTexture(gl, this.width, this.height, false);
+        this.fboOffscreenMsaa = new MsaaFrameBuffer(gl);
+        this.fboOffscreenMsaa.textureHandle = this.textureOffscreenMsaa;
+        this.fboOffscreenMsaa.width = this.width;
+        this.fboOffscreenMsaa.height = this.height;
+        this.fboOffscreenMsaa.createGLData(this.width, this.height, false);
+        this.textureOffscreenVert = TextureUtils.createNpotTexture(gl, this.width, this.height, false);
+        this.fboOffscreenVert = new FrameBuffer(gl);
+        this.fboOffscreenVert.textureHandle = this.textureOffscreenVert;
+        this.fboOffscreenVert.width = this.width;
+        this.fboOffscreenVert.height = this.height;
+        this.fboOffscreenVert.createGLData(this.width, this.height);
+        this.textureOffscreenVertMsaa = TextureUtils.createNpotTexture(gl, this.width, this.height, false);
+        this.fboOffscreenVertMsaa = new FrameBuffer(gl);
+        this.fboOffscreenVertMsaa.textureHandle = this.textureOffscreenVertMsaa;
+        this.fboOffscreenVertMsaa.width = this.width;
+        this.fboOffscreenVertMsaa.height = this.height;
+        this.fboOffscreenVertMsaa.createGLData(this.width, this.height);
+        console.log(`Created GaussianBlurRenderPass with dimensions ${this.width}x${this.height}`);
+    }
+    switchToOffscreenFBO() {
+        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboOffscreen.framebufferHandle);
+        this.gl.viewport(0, 0, this.width, this.height);
+    }
+    switchToOffscreenFBOMsaa() {
+        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboOffscreenMsaa.framebufferMsaaHandle);
+        this.gl.viewport(0, 0, this.width, this.height);
+    }
+    blitToTexture() {
+        // Blit framebuffers, no Multisample texture 2d in WebGL 2
+        this.gl.bindFramebuffer(this.gl.READ_FRAMEBUFFER, this.fboOffscreenMsaa.framebufferMsaaHandle);
+        this.gl.bindFramebuffer(this.gl.DRAW_FRAMEBUFFER, this.fboOffscreen.framebufferHandle);
+        this.gl.clearBufferfv(this.gl.COLOR, 0, [0.0, 0.0, 0.0, 1.0]);
+        this.gl.blitFramebuffer(0, 0, this.width, this.height, 0, 0, this.width, this.height, this.gl.COLOR_BUFFER_BIT, this.gl.NEAREST);
+    }
+    get texture() {
+        return this.textureOffscreen;
+    }
+    getShader(size) {
+        switch (size) {
+            case BlurSize.KERNEL_2:
+                return this.blurShader2;
+            case BlurSize.KERNEL_3:
+                return this.blurShader3;
+            default:
+            case BlurSize.KERNEL_4:
+                return this.blurShader4;
+            case BlurSize.KERNEL_5:
+                return this.blurShader5;
+        }
+    }
+    /**
+     * Binds 2D texture.
+     *
+     * @param textureUnit A texture unit to use
+     * @param texture A texture to be used
+     * @param uniform Shader's uniform ID
+     */
+    setTexture2D(textureUnit, texture, uniform) {
+        this.gl.activeTexture(this.gl.TEXTURE0 + textureUnit);
+        this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
+        this.gl.uniform1i(uniform, textureUnit);
+    }
+    blur(brightness, size) {
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
+        this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, null);
+        this.gl.disable(this.gl.BLEND);
+        let shader = this.getShader(size);
+        shader.use();
+        this.gl.uniform1f(shader.brightness, brightness);
+        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboOffscreenVert.framebufferHandle);
+        this.gl.viewport(0, 0, this.width, this.height);
+        this.gl.uniform2f(shader.direction, 0.0, 1.0);
+        this.setTexture2D(0, this.textureOffscreen, shader.sTexture);
+        this.gl.disable(this.gl.DEPTH_TEST);
+        this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
+        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboOffscreen.framebufferHandle);
+        this.gl.viewport(0, 0, this.width, this.height);
+        this.gl.uniform2f(shader.direction, 1.0, 0.0);
+        this.setTexture2D(0, this.textureOffscreenVert, shader.sTexture);
+        this.gl.disable(this.gl.DEPTH_TEST);
+        this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
+    }
+    /**
+     * Logs GL error to console.
+     *
+     * @param operation Operation name.
+     */
+    checkGlError(operation) {
+        let error;
+        while ((error = this.gl.getError()) !== this.gl.NO_ERROR) {
+            console.error(`${operation}: glError ${error}`);
+        }
     }
 }
 
@@ -4896,7 +5295,7 @@ class Renderer extends BaseRenderer {
         this.fmKnight = new FullModel();
         this.fmEagle = new FullModel();
         this.Z_NEAR = 10.0;
-        this.Z_FAR = 2000.0;
+        this.Z_FAR = 1000.0;
         this.FLAGS_PERIOD = 800;
         this.WALK_ANIM_SPEED = 2.0;
         this.HEAD1_PERIOD = 5000 / this.WALK_ANIM_SPEED;
@@ -5271,10 +5670,10 @@ class Renderer extends BaseRenderer {
         this.setTexture2D(0, this.textureAoDepth, this.shaderSsao.sDepth);
         this.gl.uniformMatrix4fv(this.shaderSsao.invProjMatrix, false, this.mInverseProjMatrix);
         this.gl.uniform2f(this.shaderSsao.texelSize, 1 / this.aoWidth, 1 / this.aoHeight);
-        this.gl.uniform1f(this.shaderSsao.radius, 24.0);
-        this.gl.uniform1f(this.shaderSsao.depthRange, 30.0);
+        this.gl.uniform1f(this.shaderSsao.radius, 30.0);
+        this.gl.uniform1f(this.shaderSsao.depthRange, 40.0);
         // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "ligher" AO output.
-        this.gl.uniform1f(this.shaderSsao.bias, 0.17);
+        this.gl.uniform1f(this.shaderSsao.bias, 0.1);
         this.gl.uniform1f(this.shaderSsao.intensity, 3.0);
         this.drawVignette(this.shaderSsao);
         this.gl.depthMask(true);
@@ -5722,6 +6121,7 @@ class Renderer extends BaseRenderer {
         this.fboSsao.height = this.aoHeight;
         this.fboSsao.createGLData(this.aoWidth, this.aoHeight);
         this.checkGlError("SSAO FBO");
+        this.aoBlurPass = new GaussianBlurRenderPass(this.gl, { width: this.aoWidth, height: this.aoHeight });
         console.log(`Initialized AO FBO. Size: ${this.aoWidth}x${this.aoHeight}, scale: ${this.AO_SCALE}`);
     }
     initVignette() {

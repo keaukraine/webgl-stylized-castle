@@ -17,6 +17,7 @@ import { CameraPositionInterpolator } from "./CameraPositionInterpolator";
 import { AMBIENT, BASE_COLORS, CASTLE_INNER_COLORS, CASTLE_OUTER_COLORS, GROUND_COLORS } from "./Colors";
 import { WindShader } from "./shaders/WindShader";
 import { SsaoShader } from "./shaders/SsaoShader";
+import { GaussianBlurRenderPass } from "./utils/GaussianBlurRenderPass";
 import { SPLINE_WALL_INNER_1, SPLINE_WALL_INNER_2, SPLINE_WALL_INNER_3, SPLINE_WALL_INNER_4, SPLINE_WALL_INNER_5, SPLINE_WALL_INNER_6 } from "./Splines";
 import { CAMERAS, CAMERA_FOV_COEFFS } from "./Cameras";
 import { TimersMap } from "./TimersMap";
@@ -64,7 +65,7 @@ export class Renderer extends BaseRenderer {
     private customCamera: mat4 | undefined;
 
     private Z_NEAR = 10.0;
-    private Z_FAR = 2000.0;
+    private Z_FAR = 1000.0;
 
     private FLAGS_PERIOD = 800;
     private WALK_ANIM_SPEED = 2.0;
@@ -136,6 +137,7 @@ export class Renderer extends BaseRenderer {
     private fboAO: FrameBuffer | undefined;
     /** Renders into `textureAoColor` without `textureAoDepth` attached, so the depth map can be sampled without forming a feedback loop. */
     private fboSsao: FrameBuffer | undefined;
+    private aoBlurPass: GaussianBlurRenderPass | undefined;
 
     protected SHADOWMAP_SIZE = 1024 * 2.0; // can be reduced to 1.3 with still OK quality
     protected readonly SHADOWMAP_TEXEL_OFFSET_SCALE = 0.666;
@@ -1221,6 +1223,8 @@ export class Renderer extends BaseRenderer {
         this.fboSsao.height = this.aoHeight;
         this.fboSsao.createGLData(this.aoWidth, this.aoHeight);
         this.checkGlError("SSAO FBO");
+
+        this.aoBlurPass = new GaussianBlurRenderPass(this.gl as WebGL2RenderingContext, { width: this.aoWidth, height: this.aoHeight });
 
         console.log(`Initialized AO FBO. Size: ${this.aoWidth}x${this.aoHeight}, scale: ${this.AO_SCALE}`);
     }

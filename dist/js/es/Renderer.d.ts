@@ -85,6 +85,7 @@ export declare class Renderer extends BaseRenderer {
     private fboAO;
     /** Renders into `textureAoColor` without `textureAoDepth` attached, so the depth map can be sampled without forming a feedback loop. */
     private fboSsao;
+    private aoBlurPass;
     protected SHADOWMAP_SIZE: number;
     protected readonly SHADOWMAP_TEXEL_OFFSET_SCALE = 0.666;
     protected PCF_BIAS_CORRECTION: number;
