@@ -491,7 +491,7 @@ export class Renderer extends BaseRenderer {
         this.drawCastleModels(false);
         this.drawWind();
 
-        this.drawTestDepthMap();
+        this.drawTestFullscreenQuad();
 
         this.framesCount++;
     }
@@ -523,8 +523,8 @@ export class Renderer extends BaseRenderer {
         this.gl.uniformMatrix4fv(this.shaderSsao.invProjMatrix!, false, this.mInverseProjMatrix);
         this.gl.uniform2f(this.shaderSsao.texelSize!, 1 / this.aoWidth, 1 / this.aoHeight);
         this.gl.uniform1f(this.shaderSsao.radius!, 24.0);
-        this.gl.uniform1f(this.shaderSsao.depthRange!, 50.0);
-        this.gl.uniform1f(this.shaderSsao.bias!, 0.05);
+        this.gl.uniform1f(this.shaderSsao.depthRange!, 30.0);
+        this.gl.uniform1f(this.shaderSsao.bias!, 0.15); // higher bias fixes z stepping artifacts on surfaces
         this.gl.uniform1f(this.shaderSsao.intensity!, 2.0);
 
         this.drawVignette(this.shaderSsao);
@@ -541,7 +541,7 @@ export class Renderer extends BaseRenderer {
         }
     }
 
-    drawTestDepthMap() {
+    drawTestFullscreenQuad() {
         this.gl.enable(this.gl.CULL_FACE);
         this.gl.cullFace(this.gl.BACK);
         this.gl.disable(this.gl.BLEND);
@@ -549,7 +549,6 @@ export class Renderer extends BaseRenderer {
         this.shaderDiffuse!.use();
 
         this.setTexture2D(0, this.textureAoColor!, this.shaderDiffuse!.sTexture!);
-        // draw full-screen quad with depth map for debug
         this.drawVignette(this.shaderDiffuse!);
     }
 

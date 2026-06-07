@@ -53,7 +53,7 @@ export class SsaoShader extends BaseShader {
 
             ${ShaderCommonFunctions.RANDOM}
 
-            const int SAMPLES = 12;
+            const int SAMPLES = 82;
             const float GOLDEN_ANGLE = 2.39996323; // ~137.5 degrees, gives a well distributed spiral
 
             // Reconstructs view-space position from a depth buffer sample at the given UV
@@ -74,10 +74,32 @@ export class SsaoShader extends BaseShader {
 
                 vec3 originPos = reconstructViewPos(vTextureCoord, originRawDepth);
 
-                // Approximate local surface normal from screen-space derivatives of the reconstructed
-                // position — the only "normal" information obtainable from a depth buffer alone.
-                // View-space camera looks down -Z, so a surface facing the camera has normal.z > 0.
-                vec3 normal = normalize(cross(dFdx(originPos), dFdy(originPos)));
+                // Approximate local surface normal from the reconstructed position of the four
+                // immediate neighbours — the only "normal" information obtainable from a depth
+                // buffer alone. Using one-sided differences (and picking the smaller jump on each
+                // axis) rather than a symmetric dFdx/dFdy avoids sampling across silhouette edges,
+                // where a central difference would straddle the object and the background and
+                // produce a garbage normal (visible as a dark outline around every object).
+                vec2 uvL = vTextureCoord - vec2(texelSize.x, 0.0);
+                vec2 uvR = vTextureCoord + vec2(texelSize.x, 0.0);
+                vec2 uvD = vTextureCoord - vec2(0.0, texelSize.y);
+                vec2 uvU = vTextureCoord + vec2(0.0, texelSize.y);
+
+                vec3 posL = reconstructViewPos(uvL, texture(sDepth, uvL).r);
+                vec3 posR = reconstructViewPos(uvR, texture(sDepth, uvR).r);
+                vec3 posD = reconstructViewPos(uvD, texture(sDepth, uvD).r);
+                vec3 posU = reconstructViewPos(uvU, texture(sDepth, uvU).r);
+
+                vec3 ddxL = originPos - posL;
+                vec3 ddxR = posR - originPos;
+                vec3 ddx = (abs(ddxL.z) < abs(ddxR.z)) ? ddxL : ddxR;
+
+                vec3 ddyD = originPos - posD;
+                vec3 ddyU = posU - originPos;
+                vec3 ddy = (abs(ddyD.z) < abs(ddyU.z)) ? ddyD : ddyU;
+
+                // View-space camera looks down -Z, so a surface facing the camera has normal.z > 0
+                vec3 normal = normalize(cross(ddx, ddy));
                 if (normal.z < 0.0) {
                     normal = -normal;
                 }
