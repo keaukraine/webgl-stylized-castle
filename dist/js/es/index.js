@@ -4068,9 +4068,9 @@ class SsaoShader extends BaseShader {
 
                 // View-space camera looks down -Z, so a surface facing the camera has normal.z > 0
                 vec3 normal = normalize(cross(ddx, ddy));
-                if (normal.z < 0.0) {
-                    normal = -normal;
-                }
+                // if (normal.z < 0.0) {
+                //     normal = -normal;
+                // }
 
                 // Per-pixel rotation of the sampling spiral to turn banding into less noticeable noise
                 float rotation = random_vec2(vTextureCoord) * 6.28318530718;
@@ -4114,6 +4114,9 @@ class SsaoShader extends BaseShader {
 
                 float ao = 1.0 - occlusion;
                 fragColor = vec4(ao, ao, ao, 1.0);
+
+                // Debug: visualize the normal
+                // fragColor *= 0.0001; fragColor.rgb += normal;
             }`;
     }
     fillUniformsAttributes() {
