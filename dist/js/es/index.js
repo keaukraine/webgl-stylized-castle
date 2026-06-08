@@ -4021,7 +4021,7 @@ class SsaoShader extends BaseShader {
 
             ${ShaderCommonFunctions.RANDOM}
 
-            const int SAMPLES = 14;
+            const int SAMPLES = 50; // FIXME
             const float GOLDEN_ANGLE = 2.39996323; // ~137.5 degrees, gives a well distributed spiral
 
             // Reconstructs view-space position from a depth buffer sample at the given UV
@@ -5300,6 +5300,58 @@ class FreeMovement {
     }
 }
 
+/**
+ * Uses indexed vertex colors.
+ * Applies shadow map and Lambertian lighting.
+ */
+class VertexColorSmAoShader extends VertexColorSmShader {
+    fillCode() {
+        super.fillCode();
+        this.fragmentShaderCode = `#version 300 es
+            precision mediump float;
+
+            in mediump vec4 vDiffuseColor;
+            in mediump float vLightCoeff;
+            out vec4 fragColor;
+
+            uniform mediump vec4 diffuse;
+            uniform mediump vec4 ambient;
+
+            // Shadowmaps stuff
+            ${UNIFORMS_VARYINGS_CONST_FILTERED_FS}
+
+            // Fog stuff
+            ${FOG_UNIFORMS_FS}
+
+            uniform sampler2D aoTexture;
+            uniform vec2 inverseAoTexSize;
+
+            void main(void)
+            {
+                highp vec3 depth = vPosition.xyz / vPosition.w;
+
+                ${shadowSmoothConditional5TapEs3("vFogAmount > 0.1")}
+
+                vec2 aoUV = gl_FragCoord.xy * inverseAoTexSize;
+                float ao = texture(aoTexture, aoUV).r;
+
+                colorCoeff = clamp(colorCoeff, shadowBrightnessFS, 1.); // clamp to limit shadow intensity
+                float lightCoeff = min(colorCoeff, vLightCoeff); // this mixes Lambert and shadow coefficients
+
+                fragColor = vDiffuseColor * mix(ambient, diffuse, lightCoeff);
+                fragColor.rgb *= ao;
+
+                // Fog stuff
+                ${FOG_CHUNK_FS}
+            }`;
+    }
+    fillUniformsAttributes() {
+        super.fillUniformsAttributes();
+        this.aoTexture = this.getUniform("aoTexture");
+        this.inverseAoTexSize = this.getUniform("inverseAoTexSize");
+    }
+}
+
 const FOV_LANDSCAPE = 35.0;
 const FOV_PORTRAIT = 60.0;
 const WIND_SEGMENTS = 50;
@@ -5486,6 +5538,7 @@ class Renderer extends BaseRenderer {
     initShaders() {
         this.shaderDiffuse = new DiffuseShader(this.gl);
         this.shaderObjects = new VertexColorSmShader(this.gl);
+        this.shaderObjectsAO = new VertexColorSmAoShader(this.gl);
         this.shaderObjectsDepth = new VertexColorDepthShader(this.gl);
         this.shaderFlag = new FlagSmShader(this.gl);
         this.shaderFlagDepth = new FlagDepthShader(this.gl);
@@ -5670,7 +5723,7 @@ class Renderer extends BaseRenderer {
         this.positionCamera(this.timers.get(Timers.Camera));
         this.drawCastleModels(false);
         this.drawWind();
-        this.drawTestFullscreenQuad();
+        // this.drawTestFullscreenQuad();
         this.framesCount++;
     }
     drawSsaoPass() {
@@ -5698,7 +5751,7 @@ class Renderer extends BaseRenderer {
         this.gl.uniform1f(this.shaderSsao.depthRange, 40.0);
         // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "ligher" AO output.
         this.gl.uniform1f(this.shaderSsao.bias, 0.1);
-        this.gl.uniform1f(this.shaderSsao.intensity, 3.0);
+        this.gl.uniform1f(this.shaderSsao.intensity, 2.0);
         this.drawVignette(this.shaderSsao);
         this.gl.depthMask(true);
         this.gl.enable(this.gl.DEPTH_TEST);
@@ -5731,6 +5784,7 @@ class Renderer extends BaseRenderer {
     }
     drawCastleModels(drawToShadowMap) {
         if (this.shaderObjects === undefined
+            || this.shaderObjectsAO === undefined
             || this.shaderObjectsDepth === undefined
             || this.shaderFlag === undefined
             || this.shaderFlagDepth === undefined) {
@@ -5742,29 +5796,31 @@ class Renderer extends BaseRenderer {
             this.shaderObjectsDepth.use();
         }
         else {
-            shaderObjects = this.shaderObjects;
-            this.shaderObjects.use();
+            shaderObjects = this.shaderObjectsAO;
+            this.shaderObjectsAO.use();
             const diffuseColor = this.getDiffuseColor();
             const ambientColor = this.getAmbientColor();
-            this.gl.uniform4f(this.shaderObjects.lightDir, this.pointLight[0], this.pointLight[1], this.pointLight[2], 0);
-            this.gl.uniform4fv(this.shaderObjects.ambient, ambientColor);
-            this.gl.uniform4fv(this.shaderObjects.diffuse, diffuseColor);
-            this.gl.uniform1f(this.shaderObjects.diffuseCoef, this.config.diffuseCoeff);
-            this.gl.uniform1f(this.shaderObjects.diffuseExponent, this.config.diffuseExponent);
-            this.setFogUniforms(this.shaderObjects);
-            this.gl.uniform3f(this.shaderObjects.lightVector, this.pointLight[0], this.pointLight[1], this.pointLight[2]);
-            this.setBaseShadowUniforms(this.shaderObjects, 0, 0, 0, 0, 0, 0, this.SCALE, this.SCALE, this.SCALE);
+            this.setTexture2D(1, this.textureAoColor, this.shaderObjectsAO.aoTexture);
+            this.gl.uniform2f(this.shaderObjectsAO.inverseAoTexSize, 1 / this.gl.canvas.width, 1 / this.gl.canvas.height);
+            this.gl.uniform4f(this.shaderObjectsAO.lightDir, this.pointLight[0], this.pointLight[1], this.pointLight[2], 0);
+            this.gl.uniform4fv(this.shaderObjectsAO.ambient, ambientColor);
+            this.gl.uniform4fv(this.shaderObjectsAO.diffuse, diffuseColor);
+            this.gl.uniform1f(this.shaderObjectsAO.diffuseCoef, this.config.diffuseCoeff);
+            this.gl.uniform1f(this.shaderObjectsAO.diffuseExponent, this.config.diffuseExponent);
+            this.setFogUniforms(this.shaderObjectsAO);
+            this.gl.uniform3f(this.shaderObjectsAO.lightVector, this.pointLight[0], this.pointLight[1], this.pointLight[2]);
+            this.setBaseShadowUniforms(this.shaderObjectsAO, 0, 0, 0, 0, 0, 0, this.SCALE, this.SCALE, this.SCALE);
         }
         if (!drawToShadowMap) {
-            this.gl.uniform3fv(this.shaderObjects.colors, CASTLE_INNER_COLORS);
+            this.gl.uniform3fv(this.shaderObjectsAO.colors, CASTLE_INNER_COLORS);
         }
         shaderObjects.drawModel(this, this.fmCastleInner, 0, 0, 0, 0, 0, 0, this.SCALE, this.SCALE, this.SCALE);
         if (!drawToShadowMap) {
-            this.gl.uniform3fv(this.shaderObjects.colors, CASTLE_OUTER_COLORS);
+            this.gl.uniform3fv(this.shaderObjectsAO.colors, CASTLE_OUTER_COLORS);
         }
         shaderObjects.drawModel(this, this.fmCastleOuter, 0, 0, 0, 0, 0, 0, this.SCALE, this.SCALE, this.SCALE);
         if (!drawToShadowMap) {
-            this.gl.uniform3fv(this.shaderObjects.colors, GROUND_COLORS);
+            this.gl.uniform3fv(this.shaderObjectsAO.colors, GROUND_COLORS);
         }
         shaderObjects.drawModel(this, this.fmGround, 0, 0, 0, 0, 0, 0, this.SCALE, this.SCALE, this.SCALE);
         // flags
