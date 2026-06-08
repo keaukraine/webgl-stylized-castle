@@ -3,6 +3,7 @@ import { GaussianBlurShader } from "./shaders/GaussianBlurShader";
 import { GaussianBlurShader4 } from "./shaders/GaussianBlurShader4";
 import { GaussianBlurShader3 } from "./shaders/GaussianBlurShader3";
 import { GaussianBlurShader2 } from "./shaders/GaussianBlurShader2";
+import { GaussianBlurShader1 } from "./shaders/GaussianBlurShader1";
 
 /**
  * Gaussian blur kernel size.
@@ -41,6 +42,7 @@ export class GaussianBlurRenderPass {
     private blurShader4: GaussianBlurShader;
     private blurShader3: GaussianBlurShader;
     private blurShader2: GaussianBlurShader;
+    private blurShader1: GaussianBlurShader;
 
     constructor(protected gl: WebGL2RenderingContext, size: RendertargetSize) {
         const { width, height, minSize, ratio } = size;
@@ -56,6 +58,7 @@ export class GaussianBlurRenderPass {
         this.blurShader4 = new GaussianBlurShader4(gl);
         this.blurShader3 = new GaussianBlurShader3(gl);
         this.blurShader2 = new GaussianBlurShader2(gl);
+        this.blurShader1 = new GaussianBlurShader1(gl);
 
         this.textureOffscreen = TextureUtils.createNpotTexture(gl, this.width, this.height, false)!;
         this.fboOffscreen = new FrameBuffer(gl);

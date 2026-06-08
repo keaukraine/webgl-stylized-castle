@@ -174,6 +174,7 @@ export declare class Renderer extends BaseRenderer {
     getCameraPosition(): vec3;
     getCanvas(): HTMLCanvasElement | undefined;
     protected createDepthTexture(gl: WebGL2RenderingContext, texWidth: number, texHeight: number): WebGLTexture | null;
+    protected createDepthTexture32(gl: WebGLRenderingContext | WebGL2RenderingContext, texWidth: number, texHeight: number): WebGLTexture | null;
     protected initOffscreen(): void;
     protected initAO(): void;
     private initVignette;

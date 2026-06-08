@@ -32,6 +32,7 @@ export declare class GaussianBlurRenderPass {
     private blurShader4;
     private blurShader3;
     private blurShader2;
+    private blurShader1;
     constructor(gl: WebGL2RenderingContext, size: RendertargetSize);
     switchToOffscreenFBO(): void;
     switchToOffscreenFBOMsaa(): void;

@@ -12,6 +12,8 @@ export class GaussianBlurShader extends BaseShader {
     rm_Vertex: number | undefined;
     rm_TexCoord0: number | undefined;
 
+    // Blur coefficients, calculated using the method described here:
+    // https://lisyarus.github.io/blog/posts/blur-coefficients-generator.html
     protected getKernel(): string {
         return `const int SAMPLE_COUNT = 6;
 const float OFFSETS[6] = float[6](

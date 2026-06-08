@@ -53,7 +53,7 @@ export class SsaoShader extends BaseShader {
 
             ${ShaderCommonFunctions.RANDOM}
 
-            const int SAMPLES = 4;
+            const int SAMPLES = 14;
             const float GOLDEN_ANGLE = 2.39996323; // ~137.5 degrees, gives a well distributed spiral
 
             // Reconstructs view-space position from a depth buffer sample at the given UV

@@ -65,7 +65,7 @@ export class Renderer extends BaseRenderer {
     private customCamera: mat4 | undefined;
 
     private Z_NEAR = 10.0;
-    private Z_FAR = 1000.0;
+    private Z_FAR = 1500.0;
 
     private FLAGS_PERIOD = 800;
     private WALK_ANIM_SPEED = 2.0;
@@ -1174,6 +1174,30 @@ export class Renderer extends BaseRenderer {
         return textureID;
     }
 
+    protected createDepthTexture32(gl: WebGLRenderingContext | WebGL2RenderingContext, texWidth: number, texHeight: number) {
+        const textureID = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, textureID);
+
+        gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+        const version: string = gl.getParameter(gl.VERSION) || "";
+
+        const glFormat = gl.DEPTH_COMPONENT;
+        const glInternalFormat = version.includes("WebGL 2")
+            ? (gl as WebGL2RenderingContext).DEPTH_COMPONENT32F
+            : gl.DEPTH_COMPONENT;
+        const type = gl.FLOAT;
+
+        // In WebGL, we cannot pass array to depth texture.
+        gl.texImage2D(gl.TEXTURE_2D, 0, glInternalFormat, texWidth, texHeight, 0, glFormat, type, null);
+
+        return textureID;
+    }
+
+
     protected initOffscreen() {
         if (this.textureOffscreenDepth !== undefined) {
             this.gl.deleteTexture(this.textureOffscreenDepth);
@@ -1206,7 +1230,7 @@ export class Renderer extends BaseRenderer {
         }
 
         this.textureAoColor = TextureUtils.createNpotTexture(this.gl, this.aoWidth, this.aoHeight, false)!;
-        this.textureAoDepth = TextureUtils.createDepthTexture(this.gl as WebGL2RenderingContext, this.aoWidth, this.aoHeight)!;
+        this.textureAoDepth = this.createDepthTexture32(this.gl as WebGL2RenderingContext, this.aoWidth, this.aoHeight)!;
         this.fboAO = new FrameBuffer(this.gl);
         this.fboAO.textureHandle = this.textureAoColor;
         this.fboAO.depthTextureHandle = this.textureAoDepth;

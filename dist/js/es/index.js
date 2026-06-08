@@ -4021,7 +4021,7 @@ class SsaoShader extends BaseShader {
 
             ${ShaderCommonFunctions.RANDOM}
 
-            const int SAMPLES = 4;
+            const int SAMPLES = 14;
             const float GOLDEN_ANGLE = 2.39996323; // ~137.5 degrees, gives a well distributed spiral
 
             // Reconstructs view-space position from a depth buffer sample at the given UV
@@ -4135,6 +4135,8 @@ class SsaoShader extends BaseShader {
  * Uses default blur radius of 5 pixels.
  */
 class GaussianBlurShader extends BaseShader {
+    // Blur coefficients, calculated using the method described here:
+    // https://lisyarus.github.io/blog/posts/blur-coefficients-generator.html
     getKernel() {
         return `const int SAMPLE_COUNT = 6;
 const float OFFSETS[6] = float[6](
@@ -4286,6 +4288,24 @@ const float WEIGHTS[3] = float[3](
 }
 
 /**
+ * Gaussian blur shader.
+ * Uses blur radius of 2 pixels.
+ */
+class GaussianBlurShader1 extends GaussianBlurShader {
+    getKernel() {
+        return `const int SAMPLE_COUNT = 2;
+const float OFFSETS[2] = float[2](
+    -0.4862426846689484,
+    1.0
+);
+const float WEIGHTS[2] = float[2](
+    0.6728376262607099,
+    0.32716237373929014
+);`;
+    }
+}
+
+/**
  * Gaussian blur kernel size.
  */
 var BlurSize;
@@ -4316,6 +4336,7 @@ class GaussianBlurRenderPass {
         this.blurShader4 = new GaussianBlurShader4(gl);
         this.blurShader3 = new GaussianBlurShader3(gl);
         this.blurShader2 = new GaussianBlurShader2(gl);
+        this.blurShader1 = new GaussianBlurShader1(gl);
         this.textureOffscreen = TextureUtils.createNpotTexture(gl, this.width, this.height, false);
         this.fboOffscreen = new FrameBuffer(gl);
         this.fboOffscreen.textureHandle = this.textureOffscreen;
@@ -5295,7 +5316,7 @@ class Renderer extends BaseRenderer {
         this.fmKnight = new FullModel();
         this.fmEagle = new FullModel();
         this.Z_NEAR = 10.0;
-        this.Z_FAR = 1000.0;
+        this.Z_FAR = 1500.0;
         this.FLAGS_PERIOD = 800;
         this.WALK_ANIM_SPEED = 2.0;
         this.HEAD1_PERIOD = 5000 / this.WALK_ANIM_SPEED;
@@ -6077,6 +6098,23 @@ class Renderer extends BaseRenderer {
         gl.texImage2D(gl.TEXTURE_2D, 0, glInternalFormat, texWidth, texHeight, 0, glFormat, type, null);
         return textureID;
     }
+    createDepthTexture32(gl, texWidth, texHeight) {
+        const textureID = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, textureID);
+        gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        const version = gl.getParameter(gl.VERSION) || "";
+        const glFormat = gl.DEPTH_COMPONENT;
+        const glInternalFormat = version.includes("WebGL 2")
+            ? gl.DEPTH_COMPONENT32F
+            : gl.DEPTH_COMPONENT;
+        const type = gl.FLOAT;
+        // In WebGL, we cannot pass array to depth texture.
+        gl.texImage2D(gl.TEXTURE_2D, 0, glInternalFormat, texWidth, texHeight, 0, glFormat, type, null);
+        return textureID;
+    }
     initOffscreen() {
         if (this.textureOffscreenDepth !== undefined) {
             this.gl.deleteTexture(this.textureOffscreenDepth);
@@ -6105,7 +6143,7 @@ class Renderer extends BaseRenderer {
             this.gl.deleteTexture(this.textureAoDepth);
         }
         this.textureAoColor = TextureUtils.createNpotTexture(this.gl, this.aoWidth, this.aoHeight, false);
-        this.textureAoDepth = TextureUtils.createDepthTexture(this.gl, this.aoWidth, this.aoHeight);
+        this.textureAoDepth = this.createDepthTexture32(this.gl, this.aoWidth, this.aoHeight);
         this.fboAO = new FrameBuffer(this.gl);
         this.fboAO.textureHandle = this.textureAoColor;
         this.fboAO.depthTextureHandle = this.textureAoDepth;
