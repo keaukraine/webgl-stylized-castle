@@ -4021,7 +4021,7 @@ class SsaoShader extends BaseShader {
 
             ${ShaderCommonFunctions.RANDOM}
 
-            const int SAMPLES = 50; // FIXME
+            const int SAMPLES = 7;
             const float GOLDEN_ANGLE = 2.39996323; // ~137.5 degrees, gives a well distributed spiral
 
             // Reconstructs view-space position from a depth buffer sample at the given UV
@@ -5340,7 +5340,7 @@ class VertexColorSmAoShader extends VertexColorSmShader {
                 float lightCoeff = min(colorCoeff, vLightCoeff); // this mixes Lambert and shadow coefficients
 
                 fragColor = vDiffuseColor * mix(ambient, diffuse, lightCoeff);
-                fragColor *= 0.0001; fragColor.rgb += vec3(1.,1.,1.); // TEST: white color for AO only
+                // fragColor *= 0.0001; fragColor.rgb += vec3(1.,1.,1.); // TEST: white color for AO only
                 fragColor.rgb *= ao;
 
                 // Fog stuff
@@ -5440,7 +5440,7 @@ class Renderer extends BaseRenderer {
         this.WIND_MOVE_PERIOD1 = 2000 + 5000;
         this.WIND_MOVE_PERIOD2 = 2500 + 5000;
         this.WIND_MOVE_PERIOD3 = 3000 + 5000;
-        this.FADE_PERIOD = 2500;
+        this.FADE_PERIOD = 2500 * 0.01; // FIXME
         this.CAMERA_PERIOD = 34000;
         this.timers = new TimersMap();
         this.randomWindCoeff1 = Math.random();
@@ -5659,7 +5659,7 @@ class Renderer extends BaseRenderer {
             this.aoWidth = Math.max(1, Math.round(this.canvas.width * this.AO_SCALE));
             this.aoHeight = Math.max(1, Math.round(this.canvas.height * this.AO_SCALE));
             // fboAO is only undefined during the very first resize, before initAO() has run for the first time
-            if (this.fboAO !== undefined) {
+            if (this.fboAoDepth !== undefined) {
                 this.initAO();
             }
         }
@@ -5733,6 +5733,7 @@ class Renderer extends BaseRenderer {
     }
     /** Issues actual draw calls */
     drawScene() {
+        var _a, _b;
         if (!this.loaded) {
             return;
         }
@@ -5758,8 +5759,8 @@ class Renderer extends BaseRenderer {
         }
         { // AO depth pass
             this.gl.colorMask(false, false, false, false);
-            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboAO.framebufferHandle);
-            this.gl.viewport(0, 0, this.fboAO.width, this.fboAO.height);
+            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboAoDepth.framebufferHandle);
+            this.gl.viewport(0, 0, this.fboAoDepth.width, this.fboAoDepth.height);
             this.gl.depthMask(true);
             this.gl.enable(this.gl.DEPTH_TEST);
             this.gl.clear(this.gl.DEPTH_BUFFER_BIT);
@@ -5767,12 +5768,22 @@ class Renderer extends BaseRenderer {
             this.positionCamera(this.timers.get(Timers.Camera));
             this.drawCastleModels(true);
         }
-        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboSsao.framebufferHandle);
-        this.gl.viewport(0, 0, this.fboSsao.width, this.fboSsao.height);
-        this.drawSsaoPass();
+        // { // SSAO pass w/o blur
+        //     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboSsao!.framebufferHandle);
+        //     this.gl.viewport(0, 0, this.fboSsao!.width!, this.fboSsao!.height!);
+        //     this.drawSsaoPass();
+        // }
+        { // SSAO pass w/ blur
+            (_a = this.aoBlurPass) === null || _a === void 0 ? void 0 : _a.switchToOffscreenFBO();
+            this.drawSsaoPass();
+            // this.aoBlurPass?.blitToTexture();
+            (_b = this.aoBlurPass) === null || _b === void 0 ? void 0 : _b.blur(1.0, BlurSize.KERNEL_2);
+        }
         this.gl.colorMask(true, true, true, true);
         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null); // This differs from OpenGL ES
         this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+        this.gl.depthMask(true);
+        this.gl.enable(this.gl.DEPTH_TEST);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
         this.setCameraFOV(1.0);
         this.positionCamera(this.timers.get(Timers.Camera));
@@ -5788,8 +5799,8 @@ class Renderer extends BaseRenderer {
         // Full-screen quad pass: estimate AO from the depth map rendered in the AO depth pass
         // and store the result in textureAoColor. Rendered into fboSsao (not fboAO) because
         // textureAoDepth must not be attached to the framebuffer while it's being sampled.
-        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboSsao.framebufferHandle);
-        this.gl.viewport(0, 0, this.fboSsao.width, this.fboSsao.height);
+        // this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboSsao!.framebufferHandle);
+        // this.gl.viewport(0, 0, this.fboSsao!.width!, this.fboSsao!.height!);
         this.gl.disable(this.gl.CULL_FACE);
         this.gl.disable(this.gl.BLEND);
         this.gl.disable(this.gl.DEPTH_TEST);
@@ -5802,11 +5813,13 @@ class Renderer extends BaseRenderer {
         this.setTexture2D(0, this.textureAoDepth, this.shaderSsao.sDepth);
         this.gl.uniformMatrix4fv(this.shaderSsao.invProjMatrix, false, this.mInverseProjMatrix);
         this.gl.uniform2f(this.shaderSsao.texelSize, 1 / this.aoWidth, 1 / this.aoHeight);
+        // higher radius require more samples to avoid noise, but allows to capture occlusion from farther away geometry.
         this.gl.uniform1f(this.shaderSsao.radius, 30.0);
-        this.gl.uniform1f(this.shaderSsao.depthRange, 40.0);
+        // higher depth range causes more haloing artifacts around geometries close to each other.
+        this.gl.uniform1f(this.shaderSsao.depthRange, 14.0);
         // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "ligher" AO output.
         this.gl.uniform1f(this.shaderSsao.bias, 0.1);
-        this.gl.uniform1f(this.shaderSsao.intensity, 2.0);
+        this.gl.uniform1f(this.shaderSsao.intensity, 1.75);
         this.drawVignette(this.shaderSsao);
         this.gl.depthMask(true);
         this.gl.enable(this.gl.DEPTH_TEST);
@@ -5824,7 +5837,7 @@ class Renderer extends BaseRenderer {
         this.gl.cullFace(this.gl.BACK);
         this.gl.disable(this.gl.BLEND);
         this.shaderDiffuse.use();
-        this.setTexture2D(0, this.textureAoColor, this.shaderDiffuse.sTexture);
+        this.setTexture2D(0, this.aoBlurPass.texture, this.shaderDiffuse.sTexture);
         this.drawVignette(this.shaderDiffuse);
     }
     drawVignette(shader) {
@@ -5855,7 +5868,8 @@ class Renderer extends BaseRenderer {
             this.shaderObjectsAO.use();
             const diffuseColor = this.getDiffuseColor();
             const ambientColor = this.getAmbientColor();
-            this.setTexture2D(1, this.textureAoColor, this.shaderObjectsAO.aoTexture);
+            // this.setTexture2D(1, this.textureAoColor!, this.shaderObjectsAO.aoTexture!); // w/o blur
+            this.setTexture2D(1, this.aoBlurPass.texture, this.shaderObjectsAO.aoTexture); // w/ blur
             this.gl.uniform2f(this.shaderObjectsAO.inverseAoTexSize, 1 / this.gl.canvas.width, 1 / this.gl.canvas.height);
             this.gl.uniform4f(this.shaderObjectsAO.lightDir, this.pointLight[0], this.pointLight[1], this.pointLight[2], 0);
             this.gl.uniform4fv(this.shaderObjectsAO.ambient, ambientColor);
@@ -6094,7 +6108,8 @@ class Renderer extends BaseRenderer {
             this.setFogUniforms(this.shaderKnightAO);
             this.gl.uniform3f(this.shaderKnightAO.lightVector, this.pointLight[0], this.pointLight[1], this.pointLight[2]);
             this.setTexture2D(1, this.textureKnight, this.shaderKnightAO.sTexture);
-            this.setTexture2D(2, this.textureAoColor, this.shaderKnightAO.aoTexture);
+            // this.setTexture2D(2, this.textureAoColor!, this.shaderKnightAO.aoTexture!); // w/o blur
+            this.setTexture2D(2, this.aoBlurPass.texture, this.shaderKnightAO.aoTexture); // w/ blur
             this.gl.uniform2f(this.shaderKnightAO.inverseAoTexSize, 1 / this.gl.canvas.width, 1 / this.gl.canvas.height);
             this.gl.uniform1f(this.shaderKnightAO.headRotationZ, headAngle);
             this.gl.uniform2f(this.shaderKnightAO.armRotations, leftArmAngle, rightArmAngle);
@@ -6260,12 +6275,12 @@ class Renderer extends BaseRenderer {
         }
         this.textureAoColor = TextureUtils.createNpotTexture(this.gl, this.aoWidth, this.aoHeight, false);
         this.textureAoDepth = this.createDepthTexture32(this.gl, this.aoWidth, this.aoHeight);
-        this.fboAO = new FrameBuffer(this.gl);
-        this.fboAO.textureHandle = this.textureAoColor;
-        this.fboAO.depthTextureHandle = this.textureAoDepth;
-        this.fboAO.width = this.aoWidth;
-        this.fboAO.height = this.aoHeight;
-        this.fboAO.createGLData(this.aoWidth, this.aoHeight);
+        this.fboAoDepth = new FrameBuffer(this.gl);
+        this.fboAoDepth.textureHandle = this.textureAoColor;
+        this.fboAoDepth.depthTextureHandle = this.textureAoDepth;
+        this.fboAoDepth.width = this.aoWidth;
+        this.fboAoDepth.height = this.aoHeight;
+        this.fboAoDepth.createGLData(this.aoWidth, this.aoHeight);
         this.checkGlError("AO FBO");
         // Separate FBO sharing the same color texture, but without textureAoDepth attached:
         // needed to sample the depth map in the SSAO pass without forming a feedback loop.

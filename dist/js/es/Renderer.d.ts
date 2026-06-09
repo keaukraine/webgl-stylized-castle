@@ -84,7 +84,7 @@ export declare class Renderer extends BaseRenderer {
     private fboOffscreen;
     private textureAoColor;
     private textureAoDepth;
-    private fboAO;
+    private fboAoDepth;
     /** Renders into `textureAoColor` without `textureAoDepth` attached, so the depth map can be sampled without forming a feedback loop. */
     private fboSsao;
     private aoBlurPass;

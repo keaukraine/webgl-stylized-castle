@@ -17,7 +17,7 @@ import { CameraPositionInterpolator } from "./CameraPositionInterpolator";
 import { AMBIENT, BASE_COLORS, CASTLE_INNER_COLORS, CASTLE_OUTER_COLORS, GROUND_COLORS } from "./Colors";
 import { WindShader } from "./shaders/WindShader";
 import { SsaoShader } from "./shaders/SsaoShader";
-import { GaussianBlurRenderPass } from "./utils/GaussianBlurRenderPass";
+import { BlurSize, GaussianBlurRenderPass } from "./utils/GaussianBlurRenderPass";
 import { SPLINE_WALL_INNER_1, SPLINE_WALL_INNER_2, SPLINE_WALL_INNER_3, SPLINE_WALL_INNER_4, SPLINE_WALL_INNER_5, SPLINE_WALL_INNER_6 } from "./Splines";
 import { CAMERAS, CAMERA_FOV_COEFFS } from "./Cameras";
 import { TimersMap } from "./TimersMap";
@@ -85,7 +85,7 @@ export class Renderer extends BaseRenderer {
     private WIND_MOVE_PERIOD1 = 2000 + 5000;
     private WIND_MOVE_PERIOD2 = 2500 + 5000;
     private WIND_MOVE_PERIOD3 = 3000 + 5000;
-    private FADE_PERIOD = 2500;
+    private FADE_PERIOD = 2500 * 0.01; // FIXME
     private CAMERA_PERIOD = 34000;
 
     private timers: TimersMap = new TimersMap();
@@ -138,7 +138,7 @@ export class Renderer extends BaseRenderer {
 
     private textureAoColor: WebGLTexture | undefined
     private textureAoDepth: WebGLTexture | undefined;
-    private fboAO: FrameBuffer | undefined;
+    private fboAoDepth: FrameBuffer | undefined;
     /** Renders into `textureAoColor` without `textureAoDepth` attached, so the depth map can be sampled without forming a feedback loop. */
     private fboSsao: FrameBuffer | undefined;
     private aoBlurPass: GaussianBlurRenderPass | undefined;
@@ -374,7 +374,7 @@ export class Renderer extends BaseRenderer {
             this.aoHeight = Math.max(1, Math.round(this.canvas.height * this.AO_SCALE));
 
             // fboAO is only undefined during the very first resize, before initAO() has run for the first time
-            if (this.fboAO !== undefined) {
+            if (this.fboAoDepth !== undefined) {
                 this.initAO();
             }
         }
@@ -491,8 +491,8 @@ export class Renderer extends BaseRenderer {
 
         { // AO depth pass
             this.gl.colorMask(false, false, false, false);
-            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboAO!.framebufferHandle);
-            this.gl.viewport(0, 0, this.fboAO!.width!, this.fboAO!.height!);
+            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboAoDepth!.framebufferHandle);
+            this.gl.viewport(0, 0, this.fboAoDepth!.width!, this.fboAoDepth!.height!);
             this.gl.depthMask(true);
             this.gl.enable(this.gl.DEPTH_TEST);
             this.gl.clear(this.gl.DEPTH_BUFFER_BIT);
@@ -501,13 +501,24 @@ export class Renderer extends BaseRenderer {
             this.drawCastleModels(true);
         }
 
-        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboSsao!.framebufferHandle);
-        this.gl.viewport(0, 0, this.fboSsao!.width!, this.fboSsao!.height!);
-        this.drawSsaoPass();
+        // { // SSAO pass w/o blur
+        //     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboSsao!.framebufferHandle);
+        //     this.gl.viewport(0, 0, this.fboSsao!.width!, this.fboSsao!.height!);
+        //     this.drawSsaoPass();
+        // }
+
+        { // SSAO pass w/ blur
+            this.aoBlurPass?.switchToOffscreenFBO();
+            this.drawSsaoPass();
+            // this.aoBlurPass?.blitToTexture();
+            this.aoBlurPass?.blur(1.0, BlurSize.KERNEL_2);
+        }
 
         this.gl.colorMask(true, true, true, true);
         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null); // This differs from OpenGL ES
         this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+        this.gl.depthMask(true);
+        this.gl.enable(this.gl.DEPTH_TEST);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
 
         this.setCameraFOV(1.0);
@@ -529,8 +540,8 @@ export class Renderer extends BaseRenderer {
         // Full-screen quad pass: estimate AO from the depth map rendered in the AO depth pass
         // and store the result in textureAoColor. Rendered into fboSsao (not fboAO) because
         // textureAoDepth must not be attached to the framebuffer while it's being sampled.
-        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboSsao!.framebufferHandle);
-        this.gl.viewport(0, 0, this.fboSsao!.width!, this.fboSsao!.height!);
+        // this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboSsao!.framebufferHandle);
+        // this.gl.viewport(0, 0, this.fboSsao!.width!, this.fboSsao!.height!);
 
         this.gl.disable(this.gl.CULL_FACE);
         this.gl.disable(this.gl.BLEND);
@@ -547,11 +558,13 @@ export class Renderer extends BaseRenderer {
         this.setTexture2D(0, this.textureAoDepth!, this.shaderSsao.sDepth!);
         this.gl.uniformMatrix4fv(this.shaderSsao.invProjMatrix!, false, this.mInverseProjMatrix);
         this.gl.uniform2f(this.shaderSsao.texelSize!, 1 / this.aoWidth, 1 / this.aoHeight);
+        // higher radius require more samples to avoid noise, but allows to capture occlusion from farther away geometry.
         this.gl.uniform1f(this.shaderSsao.radius!, 30.0);
-        this.gl.uniform1f(this.shaderSsao.depthRange!, 40.0);
+        // higher depth range causes more haloing artifacts around geometries close to each other.
+        this.gl.uniform1f(this.shaderSsao.depthRange!, 14.0);
         // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "ligher" AO output.
         this.gl.uniform1f(this.shaderSsao.bias!, 0.1);
-        this.gl.uniform1f(this.shaderSsao.intensity!, 2.0);
+        this.gl.uniform1f(this.shaderSsao.intensity!, 1.75);
 
         this.drawVignette(this.shaderSsao);
 
@@ -574,7 +587,7 @@ export class Renderer extends BaseRenderer {
 
         this.shaderDiffuse!.use();
 
-        this.setTexture2D(0, this.textureAoColor!, this.shaderDiffuse!.sTexture!);
+        this.setTexture2D(0, this.aoBlurPass!.texture!, this.shaderDiffuse!.sTexture!);
         this.drawVignette(this.shaderDiffuse!);
     }
 
@@ -613,7 +626,8 @@ export class Renderer extends BaseRenderer {
             const diffuseColor = this.getDiffuseColor();
             const ambientColor = this.getAmbientColor();
 
-            this.setTexture2D(1, this.textureAoColor!, this.shaderObjectsAO.aoTexture!);
+            // this.setTexture2D(1, this.textureAoColor!, this.shaderObjectsAO.aoTexture!); // w/o blur
+            this.setTexture2D(1, this.aoBlurPass!.texture!, this.shaderObjectsAO.aoTexture!); // w/ blur
             this.gl.uniform2f(this.shaderObjectsAO.inverseAoTexSize!, 1 / this.gl.canvas.width, 1 / this.gl.canvas.height);
 
             this.gl.uniform4f(this.shaderObjectsAO.lightDir!, this.pointLight[0], this.pointLight[1], this.pointLight[2], 0);
@@ -1009,7 +1023,9 @@ export class Renderer extends BaseRenderer {
             this.gl.uniform3f(this.shaderKnightAO.lightVector!, this.pointLight[0], this.pointLight[1], this.pointLight[2]);
             this.setTexture2D(1, this.textureKnight!, this.shaderKnightAO.sTexture!);
 
-            this.setTexture2D(2, this.textureAoColor!, this.shaderKnightAO.aoTexture!);
+            // this.setTexture2D(2, this.textureAoColor!, this.shaderKnightAO.aoTexture!); // w/o blur
+            this.setTexture2D(2, this.aoBlurPass!.texture!, this.shaderKnightAO.aoTexture!); // w/ blur
+
             this.gl.uniform2f(this.shaderKnightAO.inverseAoTexSize!, 1 / this.gl.canvas.width, 1 / this.gl.canvas.height);
 
             this.gl.uniform1f(this.shaderKnightAO.headRotationZ!, headAngle);
@@ -1245,12 +1261,12 @@ export class Renderer extends BaseRenderer {
 
         this.textureAoColor = TextureUtils.createNpotTexture(this.gl, this.aoWidth, this.aoHeight, false)!;
         this.textureAoDepth = this.createDepthTexture32(this.gl as WebGL2RenderingContext, this.aoWidth, this.aoHeight)!;
-        this.fboAO = new FrameBuffer(this.gl);
-        this.fboAO.textureHandle = this.textureAoColor;
-        this.fboAO.depthTextureHandle = this.textureAoDepth;
-        this.fboAO.width = this.aoWidth;
-        this.fboAO.height = this.aoHeight;
-        this.fboAO.createGLData(this.aoWidth, this.aoHeight);
+        this.fboAoDepth = new FrameBuffer(this.gl);
+        this.fboAoDepth.textureHandle = this.textureAoColor;
+        this.fboAoDepth.depthTextureHandle = this.textureAoDepth;
+        this.fboAoDepth.width = this.aoWidth;
+        this.fboAoDepth.height = this.aoHeight;
+        this.fboAoDepth.createGLData(this.aoWidth, this.aoHeight);
         this.checkGlError("AO FBO");
 
         // Separate FBO sharing the same color texture, but without textureAoDepth attached:
