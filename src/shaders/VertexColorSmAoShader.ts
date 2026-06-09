@@ -49,6 +49,7 @@ export class VertexColorSmAoShader extends VertexColorSmShader implements Drawab
                 float lightCoeff = min(colorCoeff, vLightCoeff); // this mixes Lambert and shadow coefficients
 
                 fragColor = vDiffuseColor * mix(ambient, diffuse, lightCoeff);
+                fragColor *= 0.0001; fragColor.rgb += vec3(1.,1.,1.); // TEST: white color for AO only
                 fragColor.rgb *= ao;
 
                 // Fog stuff
