@@ -25,6 +25,7 @@ import { Timers } from "./TimersEnum";
 import { OrbitControls } from "./OrbitControls";
 import { FreeMovement } from "./FreeMovement";
 import { VertexColorSmAoShader } from "./shaders/VertexColorSmAoShader";
+import { KnightAnimatedAoShader } from "./shaders/KnightAnimatedAoShader";
 
 const FOV_LANDSCAPE = 35.0;
 const FOV_PORTRAIT = 60.0;
@@ -59,6 +60,7 @@ export class Renderer extends BaseRenderer {
     private shaderFlag: FlagSmShader | undefined;
     private shaderFlagDepth: FlagDepthShader | undefined;
     private shaderKnight: KnightAnimatedShader | undefined;
+    private shaderKnightAO: KnightAnimatedAoShader | undefined;
     private shaderKnightDepth: KnightDepthShader | undefined;
     private shaderEagle: EagleAnimatedShader | undefined;
     private shaderEagleDepth: EagleDepthShader | undefined;
@@ -299,6 +301,7 @@ export class Renderer extends BaseRenderer {
         this.shaderFlag = new FlagSmShader(this.gl);
         this.shaderFlagDepth = new FlagDepthShader(this.gl);
         this.shaderKnight = new KnightAnimatedShader(this.gl);
+        this.shaderKnightAO = new KnightAnimatedAoShader(this.gl);
         this.shaderKnightDepth = new KnightDepthShader(this.gl);
         this.shaderEagle = new EagleAnimatedShader(this.gl);
         this.shaderEagleDepth = new EagleDepthShader(this.gl);
@@ -620,6 +623,7 @@ export class Renderer extends BaseRenderer {
             this.gl.uniform1f(this.shaderObjectsAO.diffuseExponent!, this.config.diffuseExponent);
             this.setFogUniforms(this.shaderObjectsAO);
             this.gl.uniform3f(this.shaderObjectsAO.lightVector!, this.pointLight[0], this.pointLight[1], this.pointLight[2]);
+
             this.setBaseShadowUniforms(
                 this.shaderObjectsAO,
                 0, 0, 0,
@@ -975,7 +979,7 @@ export class Renderer extends BaseRenderer {
         tx: number, ty: number, tz: number,
         rx: number, ry: number, rz: number
     ): void {
-        if (this.shaderKnight === undefined || this.shaderKnightDepth === undefined) {
+        if (this.shaderKnight === undefined || this.shaderKnightDepth === undefined || this.shaderKnightAO === undefined) {
             return;
         }
 
@@ -993,23 +997,26 @@ export class Renderer extends BaseRenderer {
             this.gl.uniform1f(this.shaderKnightDepth.headRotationZ!, headAngle);
             this.gl.uniform2f(this.shaderKnightDepth.armRotations!, leftArmAngle, rightArmAngle);
         } else {
-            shaderObjects = this.shaderKnight;
-            this.shaderKnight.use();
+            shaderObjects = this.shaderKnightAO;
+            this.shaderKnightAO.use();
 
-            this.gl.uniform4f(this.shaderKnight.lightDir!, this.pointLight[0], this.pointLight[1], this.pointLight[2], 0);
-            this.gl.uniform4fv(this.shaderKnight.ambient!, ambientColor);
-            this.gl.uniform4fv(this.shaderKnight.diffuse!, diffuseColor);
-            this.gl.uniform1f(this.shaderKnight.diffuseCoef!, this.config.diffuseCoeff);
-            this.gl.uniform1f(this.shaderKnight.diffuseExponent!, this.config.diffuseExponent);
-            this.setFogUniforms(this.shaderKnight);
-            this.gl.uniform3f(this.shaderKnight.lightVector!, this.pointLight[0], this.pointLight[1], this.pointLight[2]);
-            this.setTexture2D(1, this.textureKnight!, this.shaderKnight.sTexture!);
+            this.gl.uniform4f(this.shaderKnightAO.lightDir!, this.pointLight[0], this.pointLight[1], this.pointLight[2], 0);
+            this.gl.uniform4fv(this.shaderKnightAO.ambient!, ambientColor);
+            this.gl.uniform4fv(this.shaderKnightAO.diffuse!, diffuseColor);
+            this.gl.uniform1f(this.shaderKnightAO.diffuseCoef!, this.config.diffuseCoeff);
+            this.gl.uniform1f(this.shaderKnightAO.diffuseExponent!, this.config.diffuseExponent);
+            this.setFogUniforms(this.shaderKnightAO);
+            this.gl.uniform3f(this.shaderKnightAO.lightVector!, this.pointLight[0], this.pointLight[1], this.pointLight[2]);
+            this.setTexture2D(1, this.textureKnight!, this.shaderKnightAO.sTexture!);
 
-            this.gl.uniform1f(this.shaderKnight.headRotationZ!, headAngle);
-            this.gl.uniform2f(this.shaderKnight.armRotations!, leftArmAngle, rightArmAngle);
+            this.setTexture2D(2, this.textureAoColor!, this.shaderKnightAO.aoTexture!);
+            this.gl.uniform2f(this.shaderKnightAO.inverseAoTexSize!, 1 / this.gl.canvas.width, 1 / this.gl.canvas.height);
+
+            this.gl.uniform1f(this.shaderKnightAO.headRotationZ!, headAngle);
+            this.gl.uniform2f(this.shaderKnightAO.armRotations!, leftArmAngle, rightArmAngle);
 
             this.setBaseShadowUniforms(
-                this.shaderKnight,
+                this.shaderKnightAO,
                 tx, ty, tz,
                 rx, ry, rz,
                 scaleKnight, scaleKnight, scaleKnight

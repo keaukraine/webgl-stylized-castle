@@ -25,6 +25,7 @@ export declare class Renderer extends BaseRenderer {
     private shaderFlag;
     private shaderFlagDepth;
     private shaderKnight;
+    private shaderKnightAO;
     private shaderKnightDepth;
     private shaderEagle;
     private shaderEagleDepth;

@@ -5323,6 +5323,7 @@ class VertexColorSmAoShader extends VertexColorSmShader {
             // Fog stuff
             ${FOG_UNIFORMS_FS}
 
+            // AO stuff
             uniform sampler2D aoTexture;
             uniform vec2 inverseAoTexSize;
 
@@ -5339,6 +5340,58 @@ class VertexColorSmAoShader extends VertexColorSmShader {
                 float lightCoeff = min(colorCoeff, vLightCoeff); // this mixes Lambert and shadow coefficients
 
                 fragColor = vDiffuseColor * mix(ambient, diffuse, lightCoeff);
+                fragColor.rgb *= ao;
+
+                // Fog stuff
+                ${FOG_CHUNK_FS}
+            }`;
+    }
+    fillUniformsAttributes() {
+        super.fillUniformsAttributes();
+        this.aoTexture = this.getUniform("aoTexture");
+        this.inverseAoTexSize = this.getUniform("inverseAoTexSize");
+    }
+}
+
+/**
+ * Procedurally animated knight character.
+ */
+class KnightAnimatedAoShader extends KnightAnimatedShader {
+    fillCode() {
+        super.fillCode();
+        this.fragmentShaderCode = `#version 300 es
+            precision mediump float;
+
+            in vec2 vTexCoord;
+            in vec3 vVertex;
+            in float vLightCoeff;
+            out vec4 fragColor;
+
+            uniform mediump vec4 diffuse;
+            uniform mediump vec4 ambient;
+            uniform sampler2D sTexture;
+
+            // Shadowmaps stuff
+            ${UNIFORMS_VARYINGS_CONST_FILTERED_FS}
+
+            // Fog stuff
+            ${FOG_UNIFORMS_FS}
+
+            // AO stuff
+            uniform sampler2D aoTexture;
+            uniform vec2 inverseAoTexSize;
+
+            void main(void)
+            {
+                highp vec3 depth = vPosition.xyz / vPosition.w;
+                ${shadowSmoothConditional5TapEs3("vFogAmount > 0.1")}
+                colorCoeff = clamp(colorCoeff, shadowBrightnessFS, 1.); // clamp to limit shadow intensity
+                float lightCoeff = min(colorCoeff, vLightCoeff); // this mixes Lambert and shadow coefficients
+
+                fragColor = texture(sTexture, vTexCoord) * mix(ambient, diffuse, lightCoeff);
+
+                vec2 aoUV = gl_FragCoord.xy * inverseAoTexSize;
+                float ao = texture(aoTexture, aoUV).r;
                 fragColor.rgb *= ao;
 
                 // Fog stuff
@@ -5543,6 +5596,7 @@ class Renderer extends BaseRenderer {
         this.shaderFlag = new FlagSmShader(this.gl);
         this.shaderFlagDepth = new FlagDepthShader(this.gl);
         this.shaderKnight = new KnightAnimatedShader(this.gl);
+        this.shaderKnightAO = new KnightAnimatedAoShader(this.gl);
         this.shaderKnightDepth = new KnightDepthShader(this.gl);
         this.shaderEagle = new EagleAnimatedShader(this.gl);
         this.shaderEagleDepth = new EagleDepthShader(this.gl);
@@ -6015,7 +6069,7 @@ class Renderer extends BaseRenderer {
         this.drawKnight(drawToShadowMap, headAngle, leftArmAngle, rightArmAngle, p.y, p.x, p.z + step, 0, 0, r);
     }
     drawKnight(drawToShadowMap, headAngle, leftArmAngle, rightArmAngle, tx, ty, tz, rx, ry, rz) {
-        if (this.shaderKnight === undefined || this.shaderKnightDepth === undefined) {
+        if (this.shaderKnight === undefined || this.shaderKnightDepth === undefined || this.shaderKnightAO === undefined) {
             return;
         }
         const diffuseColor = this.getDiffuseColor();
@@ -6029,19 +6083,21 @@ class Renderer extends BaseRenderer {
             this.gl.uniform2f(this.shaderKnightDepth.armRotations, leftArmAngle, rightArmAngle);
         }
         else {
-            shaderObjects = this.shaderKnight;
-            this.shaderKnight.use();
-            this.gl.uniform4f(this.shaderKnight.lightDir, this.pointLight[0], this.pointLight[1], this.pointLight[2], 0);
-            this.gl.uniform4fv(this.shaderKnight.ambient, ambientColor);
-            this.gl.uniform4fv(this.shaderKnight.diffuse, diffuseColor);
-            this.gl.uniform1f(this.shaderKnight.diffuseCoef, this.config.diffuseCoeff);
-            this.gl.uniform1f(this.shaderKnight.diffuseExponent, this.config.diffuseExponent);
-            this.setFogUniforms(this.shaderKnight);
-            this.gl.uniform3f(this.shaderKnight.lightVector, this.pointLight[0], this.pointLight[1], this.pointLight[2]);
-            this.setTexture2D(1, this.textureKnight, this.shaderKnight.sTexture);
-            this.gl.uniform1f(this.shaderKnight.headRotationZ, headAngle);
-            this.gl.uniform2f(this.shaderKnight.armRotations, leftArmAngle, rightArmAngle);
-            this.setBaseShadowUniforms(this.shaderKnight, tx, ty, tz, rx, ry, rz, scaleKnight, scaleKnight, scaleKnight);
+            shaderObjects = this.shaderKnightAO;
+            this.shaderKnightAO.use();
+            this.gl.uniform4f(this.shaderKnightAO.lightDir, this.pointLight[0], this.pointLight[1], this.pointLight[2], 0);
+            this.gl.uniform4fv(this.shaderKnightAO.ambient, ambientColor);
+            this.gl.uniform4fv(this.shaderKnightAO.diffuse, diffuseColor);
+            this.gl.uniform1f(this.shaderKnightAO.diffuseCoef, this.config.diffuseCoeff);
+            this.gl.uniform1f(this.shaderKnightAO.diffuseExponent, this.config.diffuseExponent);
+            this.setFogUniforms(this.shaderKnightAO);
+            this.gl.uniform3f(this.shaderKnightAO.lightVector, this.pointLight[0], this.pointLight[1], this.pointLight[2]);
+            this.setTexture2D(1, this.textureKnight, this.shaderKnightAO.sTexture);
+            this.setTexture2D(2, this.textureAoColor, this.shaderKnightAO.aoTexture);
+            this.gl.uniform2f(this.shaderKnightAO.inverseAoTexSize, 1 / this.gl.canvas.width, 1 / this.gl.canvas.height);
+            this.gl.uniform1f(this.shaderKnightAO.headRotationZ, headAngle);
+            this.gl.uniform2f(this.shaderKnightAO.armRotations, leftArmAngle, rightArmAngle);
+            this.setBaseShadowUniforms(this.shaderKnightAO, tx, ty, tz, rx, ry, rz, scaleKnight, scaleKnight, scaleKnight);
         }
         shaderObjects.drawModel(this, this.fmKnight, tx, ty, tz, rx, ry, rz, scaleKnight, scaleKnight, scaleKnight);
     }
