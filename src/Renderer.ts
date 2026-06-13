@@ -577,7 +577,7 @@ export class Renderer extends BaseRenderer {
         this.gl.uniform1f(this.shaderSsao.depthRange!, 14.0);
         // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "ligher" AO output.
         this.gl.uniform1f(this.shaderSsao.bias!, 0.1);
-        this.gl.uniform1f(this.shaderSsao.intensity!, 1.8);
+        this.gl.uniform1f(this.shaderSsao.intensity!, 1.5);
 
         this.drawVignette(this.shaderSsao);
 
@@ -1229,10 +1229,19 @@ export class Renderer extends BaseRenderer {
         const version: string = gl.getParameter(gl.VERSION) || "";
 
         const glFormat = gl.DEPTH_COMPONENT;
-        const glInternalFormat = version.includes("WebGL 2")
-            ? (gl as WebGL2RenderingContext).DEPTH_COMPONENT32F
-            : gl.DEPTH_COMPONENT;
-        const type = gl.FLOAT;
+
+        // const glInternalFormat = (gl as WebGL2RenderingContext).DEPTH_COMPONENT32F;
+        // const type = gl.FLOAT;
+
+        // TODO: 24-bit depth is good enough, no need for 32-bit.
+        // Need to test extenstions GL_OES_depth24 / GL_OES_depth32
+        // https://registry.khronos.org/OpenGL/extensions/OES/OES_depth24.txt
+
+        const glInternalFormat = (gl as WebGL2RenderingContext).DEPTH_COMPONENT24;
+        const type = gl.UNSIGNED_INT;
+
+        // const glInternalFormat = gl.DEPTH_COMPONENT16;
+        // const type = gl.UNSIGNED_SHORT;
 
         // In WebGL, we cannot pass array to depth texture.
         gl.texImage2D(gl.TEXTURE_2D, 0, glInternalFormat, texWidth, texHeight, 0, glFormat, type, null);

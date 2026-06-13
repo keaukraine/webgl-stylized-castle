@@ -4011,7 +4011,7 @@ class SsaoShader extends BaseShader {
             in vec2 vTextureCoord;
             out vec4 fragColor;
 
-            uniform sampler2D sDepth;
+            uniform highp sampler2D sDepth;
             uniform mat4 invProjMatrix; // inverse of the projection matrix used to render sDepth
             uniform vec2 texelSize; // 1 / depth texture size, in texels
             uniform float radius; // sampling radius, in texels
@@ -5833,7 +5833,7 @@ class Renderer extends BaseRenderer {
         this.gl.uniform1f(this.shaderSsao.depthRange, 14.0);
         // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "ligher" AO output.
         this.gl.uniform1f(this.shaderSsao.bias, 0.1);
-        this.gl.uniform1f(this.shaderSsao.intensity, 1.8);
+        this.gl.uniform1f(this.shaderSsao.intensity, 1.5);
         this.drawVignette(this.shaderSsao);
         this.gl.depthMask(true);
         this.gl.enable(this.gl.DEPTH_TEST);
@@ -6250,12 +6250,17 @@ class Renderer extends BaseRenderer {
         gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        const version = gl.getParameter(gl.VERSION) || "";
+        gl.getParameter(gl.VERSION) || "";
         const glFormat = gl.DEPTH_COMPONENT;
-        const glInternalFormat = version.includes("WebGL 2")
-            ? gl.DEPTH_COMPONENT32F
-            : gl.DEPTH_COMPONENT;
-        const type = gl.FLOAT;
+        // const glInternalFormat = (gl as WebGL2RenderingContext).DEPTH_COMPONENT32F;
+        // const type = gl.FLOAT;
+        // TODO: 24-bit depth is good enough, no need for 32-bit.
+        // Need to test extenstions GL_OES_depth24 / GL_OES_depth32
+        // https://registry.khronos.org/OpenGL/extensions/OES/OES_depth24.txt
+        const glInternalFormat = gl.DEPTH_COMPONENT24;
+        const type = gl.UNSIGNED_INT;
+        // const glInternalFormat = gl.DEPTH_COMPONENT16;
+        // const type = gl.UNSIGNED_SHORT;
         // In WebGL, we cannot pass array to depth texture.
         gl.texImage2D(gl.TEXTURE_2D, 0, glInternalFormat, texWidth, texHeight, 0, glFormat, type, null);
         return textureID;

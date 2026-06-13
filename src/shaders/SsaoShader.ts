@@ -43,7 +43,7 @@ export class SsaoShader extends BaseShader {
             in vec2 vTextureCoord;
             out vec4 fragColor;
 
-            uniform sampler2D sDepth;
+            uniform highp sampler2D sDepth;
             uniform mat4 invProjMatrix; // inverse of the projection matrix used to render sDepth
             uniform vec2 texelSize; // 1 / depth texture size, in texels
             uniform float radius; // sampling radius, in texels
