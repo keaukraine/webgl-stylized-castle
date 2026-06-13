@@ -255,7 +255,7 @@ export class Renderer extends BaseRenderer {
         this.orbitControls = new OrbitControls(
             this,
             {
-                yaw: Math.random() * Math.PI * 2,
+                yaw: Math.random() * Math.PI * 2 * 0, // FIXME
                 pitch: 2.5,
                 radius: 400,
                 speed: 0.004,
@@ -559,12 +559,12 @@ export class Renderer extends BaseRenderer {
         this.gl.uniformMatrix4fv(this.shaderSsao.invProjMatrix!, false, this.mInverseProjMatrix);
         this.gl.uniform2f(this.shaderSsao.texelSize!, 1 / this.aoWidth, 1 / this.aoHeight);
         // higher radius require more samples to avoid noise, but allows to capture occlusion from farther away geometry.
-        this.gl.uniform1f(this.shaderSsao.radius!, 30.0);
+        this.gl.uniform1f(this.shaderSsao.radius!, 25.0);
         // higher depth range causes more haloing artifacts around geometries close to each other.
         this.gl.uniform1f(this.shaderSsao.depthRange!, 14.0);
         // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "ligher" AO output.
         this.gl.uniform1f(this.shaderSsao.bias!, 0.1);
-        this.gl.uniform1f(this.shaderSsao.intensity!, 1.75);
+        this.gl.uniform1f(this.shaderSsao.intensity!, 1.8);
 
         this.drawVignette(this.shaderSsao);
 

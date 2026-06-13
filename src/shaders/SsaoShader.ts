@@ -53,7 +53,7 @@ export class SsaoShader extends BaseShader {
 
             ${ShaderCommonFunctions.RANDOM}
 
-            const int SAMPLES = 7;
+            const int SAMPLES = 10;
             const float GOLDEN_ANGLE = 2.39996323; // ~137.5 degrees, gives a well distributed spiral
 
             // Reconstructs view-space position from a depth buffer sample at the given UV
@@ -100,11 +100,12 @@ export class SsaoShader extends BaseShader {
 
                 // View-space camera looks down -Z, so a surface facing the camera has normal.z > 0
                 vec3 normal = normalize(cross(ddx, ddy));
-                // if (normal.z < 0.0) {
-                //     normal = -normal;
-                // }
+
+                // TODO: precalculate these sin+cos tables in JavaScript and pass as small FP32/FP16 texture or hardcoded matrix
 
                 // Per-pixel rotation of the sampling spiral to turn banding into less noticeable noise
+                // float rotation = random_vec2(mod(vTextureCoord, 0.003125)) * 6.28318530718; // FIXME: TEST - simulate very small (4x4) repetitive random texture or even matrix
+
                 float rotation = random_vec2(vTextureCoord) * 6.28318530718;
                 float cs = cos(rotation);
                 float sn = sin(rotation);
@@ -149,6 +150,7 @@ export class SsaoShader extends BaseShader {
 
                 // Debug: visualize the normal
                 // fragColor *= 0.0001; fragColor.rgb += normal;
+                // fragColor *= 0.0001; fragColor.rgb += vec3(rotation);
             }`;
     }
 

@@ -4021,7 +4021,7 @@ class SsaoShader extends BaseShader {
 
             ${ShaderCommonFunctions.RANDOM}
 
-            const int SAMPLES = 7;
+            const int SAMPLES = 10;
             const float GOLDEN_ANGLE = 2.39996323; // ~137.5 degrees, gives a well distributed spiral
 
             // Reconstructs view-space position from a depth buffer sample at the given UV
@@ -4068,11 +4068,12 @@ class SsaoShader extends BaseShader {
 
                 // View-space camera looks down -Z, so a surface facing the camera has normal.z > 0
                 vec3 normal = normalize(cross(ddx, ddy));
-                // if (normal.z < 0.0) {
-                //     normal = -normal;
-                // }
+
+                // TODO: precalculate these sin+cos tables in JavaScript and pass as small FP32/FP16 texture or hardcoded matrix
 
                 // Per-pixel rotation of the sampling spiral to turn banding into less noticeable noise
+                // float rotation = random_vec2(mod(vTextureCoord, 0.003125)) * 6.28318530718; // FIXME: TEST - simulate very small (4x4) repetitive random texture or even matrix
+
                 float rotation = random_vec2(vTextureCoord) * 6.28318530718;
                 float cs = cos(rotation);
                 float sn = sin(rotation);
@@ -4117,6 +4118,7 @@ class SsaoShader extends BaseShader {
 
                 // Debug: visualize the normal
                 // fragColor *= 0.0001; fragColor.rgb += normal;
+                // fragColor *= 0.0001; fragColor.rgb += vec3(rotation);
             }`;
     }
     fillUniformsAttributes() {
@@ -5557,7 +5559,7 @@ class Renderer extends BaseRenderer {
     }
     onAfterInit() {
         this.orbitControls = new OrbitControls(this, {
-            yaw: Math.random() * Math.PI * 2,
+            yaw: Math.random() * Math.PI * 2 * 0,
             pitch: 2.5,
             radius: 400,
             speed: 0.004,
@@ -5814,12 +5816,12 @@ class Renderer extends BaseRenderer {
         this.gl.uniformMatrix4fv(this.shaderSsao.invProjMatrix, false, this.mInverseProjMatrix);
         this.gl.uniform2f(this.shaderSsao.texelSize, 1 / this.aoWidth, 1 / this.aoHeight);
         // higher radius require more samples to avoid noise, but allows to capture occlusion from farther away geometry.
-        this.gl.uniform1f(this.shaderSsao.radius, 30.0);
+        this.gl.uniform1f(this.shaderSsao.radius, 25.0);
         // higher depth range causes more haloing artifacts around geometries close to each other.
         this.gl.uniform1f(this.shaderSsao.depthRange, 14.0);
         // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "ligher" AO output.
         this.gl.uniform1f(this.shaderSsao.bias, 0.1);
-        this.gl.uniform1f(this.shaderSsao.intensity, 1.75);
+        this.gl.uniform1f(this.shaderSsao.intensity, 1.8);
         this.drawVignette(this.shaderSsao);
         this.gl.depthMask(true);
         this.gl.enable(this.gl.DEPTH_TEST);
