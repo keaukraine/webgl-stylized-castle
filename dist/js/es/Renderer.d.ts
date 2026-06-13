@@ -6,6 +6,9 @@ import { OrbitControls } from "./OrbitControls";
 import { FreeMovement } from "./FreeMovement";
 export declare class Renderer extends BaseRenderer {
     private lastTime;
+    fps: number;
+    private fpsFrameCount;
+    private fpsLastTime;
     private loaded;
     private fmCastleInner;
     private fmCastleOuter;

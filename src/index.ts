@@ -91,4 +91,6 @@ function initUI(): void {
         .onChange(value => renderer.setCameraMode(+value));
 
     gui.add(dummyConfig, "github").name("Source at Github");
+
+    gui.add(renderer, "fps").name("FPS").listen().domElement.style.pointerEvents = "none";
 }

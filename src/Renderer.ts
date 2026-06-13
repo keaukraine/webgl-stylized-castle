@@ -37,6 +37,10 @@ const WIND_COLOR = 0.12;
 export class Renderer extends BaseRenderer {
     private lastTime = 0;
 
+    public fps = 0;
+    private fpsFrameCount = 0;
+    private fpsLastTime = 0;
+
     private loaded = false;
 
     private fmCastleInner = new FullModel();
@@ -393,6 +397,15 @@ export class Renderer extends BaseRenderer {
         }
 
         this.lastTime = timeNow;
+
+        this.fpsFrameCount++;
+        if (this.fpsLastTime === 0) {
+            this.fpsLastTime = timeNow;
+        } else if (timeNow - this.fpsLastTime >= 500) {
+            this.fps = this.fpsFrameCount * 1000 / (timeNow - this.fpsLastTime);
+            this.fpsFrameCount = 0;
+            this.fpsLastTime = timeNow;
+        }
     }
 
     /** Calculates projection matrix */

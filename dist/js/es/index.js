@@ -5417,6 +5417,9 @@ class Renderer extends BaseRenderer {
     constructor() {
         super();
         this.lastTime = 0;
+        this.fps = 0;
+        this.fpsFrameCount = 0;
+        this.fpsLastTime = 0;
         this.loaded = false;
         this.fmCastleInner = new FullModel();
         this.fmCastleOuter = new FullModel();
@@ -5676,6 +5679,15 @@ class Renderer extends BaseRenderer {
             }
         }
         this.lastTime = timeNow;
+        this.fpsFrameCount++;
+        if (this.fpsLastTime === 0) {
+            this.fpsLastTime = timeNow;
+        }
+        else if (timeNow - this.fpsLastTime >= 500) {
+            this.fps = this.fpsFrameCount * 1000 / (timeNow - this.fpsLastTime);
+            this.fpsFrameCount = 0;
+            this.fpsLastTime = timeNow;
+        }
     }
     /** Calculates projection matrix */
     setCameraFOV(multiplier) {
@@ -8904,5 +8916,6 @@ function initUI() {
         .name("Camera")
         .onChange(value => renderer.setCameraMode(+value));
     gui.add(dummyConfig, "github").name("Source at Github");
+    gui.add(renderer, "fps").name("FPS").listen().domElement.style.pointerEvents = "none";
 }
 //# sourceMappingURL=index.js.map
