@@ -525,6 +525,7 @@ export class Renderer extends BaseRenderer {
             this.drawSsaoPass();
             // this.aoBlurPass?.blitToTexture();
             this.aoBlurPass?.blur(1.0, BlurSize.KERNEL_2);
+            // this.aoBlurPass?.blur(1.0, BlurSize.KERNEL_2);
         }
 
         this.gl.colorMask(true, true, true, true);
@@ -576,8 +577,8 @@ export class Renderer extends BaseRenderer {
         // higher depth range causes more haloing artifacts around geometries close to each other.
         this.gl.uniform1f(this.shaderSsao.depthRange!, 14.0);
         // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "ligher" AO output.
-        this.gl.uniform1f(this.shaderSsao.bias!, 0.1);
-        this.gl.uniform1f(this.shaderSsao.intensity!, 1.5);
+        this.gl.uniform1f(this.shaderSsao.bias!, 0.0);
+        this.gl.uniform1f(this.shaderSsao.intensity!, 1.3);
 
         this.drawVignette(this.shaderSsao);
 

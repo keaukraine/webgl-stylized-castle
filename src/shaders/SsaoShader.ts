@@ -53,7 +53,7 @@ export class SsaoShader extends BaseShader {
 
             ${ShaderCommonFunctions.RANDOM}
 
-            const int SAMPLES = 10;
+            const int SAMPLES = 7;
             const float GOLDEN_ANGLE = 2.39996323; // ~137.5 degrees, gives a well distributed spiral
 
             // Reconstructs view-space position from a depth buffer sample at the given UV
@@ -173,6 +173,7 @@ export class SsaoShader extends BaseShader {
                 occlusion = clamp(occlusion / max(totalWeight, 0.0001) * intensity, 0.0, 1.0);
 
                 float ao = 1.0 - occlusion;
+                // ao = pow(ao, 3.0);
                 fragColor = vec4(ao, ao, ao, 1.0);
 
                 // Debug: visualize the normal

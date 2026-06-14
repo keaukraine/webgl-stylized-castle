@@ -4021,7 +4021,7 @@ class SsaoShader extends BaseShader {
 
             ${ShaderCommonFunctions.RANDOM}
 
-            const int SAMPLES = 10;
+            const int SAMPLES = 7;
             const float GOLDEN_ANGLE = 2.39996323; // ~137.5 degrees, gives a well distributed spiral
 
             // Reconstructs view-space position from a depth buffer sample at the given UV
@@ -4141,6 +4141,7 @@ class SsaoShader extends BaseShader {
                 occlusion = clamp(occlusion / max(totalWeight, 0.0001) * intensity, 0.0, 1.0);
 
                 float ao = 1.0 - occlusion;
+                // ao = pow(ao, 3.0);
                 fragColor = vec4(ao, ao, ao, 1.0);
 
                 // Debug: visualize the normal
@@ -5819,6 +5820,7 @@ class Renderer extends BaseRenderer {
             this.drawSsaoPass();
             // this.aoBlurPass?.blitToTexture();
             (_b = this.aoBlurPass) === null || _b === void 0 ? void 0 : _b.blur(1.0, BlurSize.KERNEL_2);
+            // this.aoBlurPass?.blur(1.0, BlurSize.KERNEL_2);
         }
         this.gl.colorMask(true, true, true, true);
         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null); // This differs from OpenGL ES
@@ -5859,8 +5861,8 @@ class Renderer extends BaseRenderer {
         // higher depth range causes more haloing artifacts around geometries close to each other.
         this.gl.uniform1f(this.shaderSsao.depthRange, 14.0);
         // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "ligher" AO output.
-        this.gl.uniform1f(this.shaderSsao.bias, 0.1);
-        this.gl.uniform1f(this.shaderSsao.intensity, 1.5);
+        this.gl.uniform1f(this.shaderSsao.bias, 0.0);
+        this.gl.uniform1f(this.shaderSsao.intensity, 1.3);
         this.drawVignette(this.shaderSsao);
         this.gl.depthMask(true);
         this.gl.enable(this.gl.DEPTH_TEST);
