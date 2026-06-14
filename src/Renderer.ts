@@ -190,7 +190,7 @@ export class Renderer extends BaseRenderer {
     protected freeMovement?: FreeMovement;
 
     /** AO render target size as a fraction of the canvas size. */
-    protected AO_SCALE = 0.5;
+    protected AO_SCALE = 0.4;
     protected aoWidth = 600;
     protected aoHeight = 400;
 
@@ -524,7 +524,7 @@ export class Renderer extends BaseRenderer {
             this.aoBlurPass?.switchToOffscreenFBO();
             this.drawSsaoPass();
             // this.aoBlurPass?.blitToTexture();
-            // this.aoBlurPass?.blur(1.0, BlurSize.KERNEL_2);
+            this.aoBlurPass?.blur(1.0, BlurSize.KERNEL_2);
         }
 
         this.gl.colorMask(true, true, true, true);
@@ -540,7 +540,7 @@ export class Renderer extends BaseRenderer {
         this.drawCastleModels(false);
         this.drawWind();
 
-        this.drawTestFullscreenQuad();
+        // this.drawTestFullscreenQuad();
 
         this.framesCount++;
     }
@@ -572,7 +572,7 @@ export class Renderer extends BaseRenderer {
         this.gl.uniformMatrix4fv(this.shaderSsao.invProjMatrix!, false, this.mInverseProjMatrix);
         this.gl.uniform2f(this.shaderSsao.texelSize!, 1 / this.aoWidth, 1 / this.aoHeight);
         // higher radius require more samples to avoid noise, but allows to capture occlusion from farther away geometry.
-        this.gl.uniform1f(this.shaderSsao.radius!, 25.0);
+        this.gl.uniform1f(this.shaderSsao.radius!, 20.0);
         // higher depth range causes more haloing artifacts around geometries close to each other.
         this.gl.uniform1f(this.shaderSsao.depthRange!, 14.0);
         // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "ligher" AO output.

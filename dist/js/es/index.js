@@ -4026,9 +4026,60 @@ class SsaoShader extends BaseShader {
 
             // Reconstructs view-space position from a depth buffer sample at the given UV
             vec3 reconstructViewPos(vec2 uv, float rawDepth) {
-                vec4 ndc = vec4(uv * 2.0 - 1.0, rawDepth * 2.0 - 1.0, 1.0);
+                vec4 ndc = vec4(vec3(uv, rawDepth) * 2.0 - 1.0, 1.0);
                 vec4 viewPos = invProjMatrix * ndc;
                 return viewPos.xyz / viewPos.w;
+            }
+
+            vec3 depthToNormal(vec2 vTextureCoord, float originRawDepth, vec3 originPos) {
+                // Approximate local surface normal from the reconstructed position of the four
+                // immediate neighbours — the only "normal" information obtainable from a depth
+                // buffer alone. Using one-sided differences (and picking the smaller jump on each
+                // axis) rather than a symmetric dFdx/dFdy avoids sampling across silhouette edges,
+                // where a central difference would straddle the object and the background and
+                // produce a garbage normal (visible as a dark outline around every object).
+
+                // vec2 uvL = vTextureCoord + vec2(-texelSize.x, 0.0);
+                // vec2 uvR = vTextureCoord + vec2(texelSize.x, 0.0);
+                // vec2 uvD = vTextureCoord + vec2(0.0, -texelSize.y);
+                // vec2 uvU = vTextureCoord + vec2(0.0, texelSize.y);
+
+                vec4 uvLR = vec4(vTextureCoord, vTextureCoord) + vec4(-texelSize.x, 0.0, texelSize.x, 0.0);
+                vec4 uvUD = vec4(vTextureCoord, vTextureCoord) + vec4(0.0, -texelSize.y, 0.0, texelSize.y);
+                vec2 uvL = uvLR.xy;
+                vec2 uvR = uvLR.zw;
+                vec2 uvD = uvUD.xy;
+                vec2 uvU = uvUD.zw;
+
+                vec3 posL = reconstructViewPos(uvL, texture(sDepth, uvL).x);
+                vec3 posR = reconstructViewPos(uvR, texture(sDepth, uvR).x);
+                vec3 posD = reconstructViewPos(uvD, texture(sDepth, uvD).x);
+                vec3 posU = reconstructViewPos(uvU, texture(sDepth, uvU).x);
+
+                vec3 ddxL = originPos - posL;
+                vec3 ddxR = posR - originPos;
+                vec3 ddx = (abs(ddxL.z) < abs(ddxR.z)) ? ddxL : ddxR;
+
+                vec3 ddyD = originPos - posD;
+                vec3 ddyU = posU - originPos;
+                vec3 ddy = (abs(ddyD.z) < abs(ddyU.z)) ? ddyD : ddyU;
+
+                // View-space camera looks down -Z, so a surface facing the camera has normal.z > 0
+                vec3 normal = normalize(cross(ddx, ddy));
+
+                return normal;
+            }
+
+            vec3 depthToNormal2(vec2 tc, float rawDepth) {
+                float depth = rawDepth;
+                vec4 clipSpace = vec4(tc * 2.0 - 1.0, depth, 1.0);
+                vec4 viewSpace = invProjMatrix * clipSpace;
+                viewSpace.xyz /= viewSpace.w;
+                vec3 pos = viewSpace.xyz;
+                vec3 n = normalize(cross(dFdx(pos), dFdy(pos)));
+                // n *= -1.0;
+
+                return n;
             }
 
             void main() {
@@ -4042,32 +4093,8 @@ class SsaoShader extends BaseShader {
 
                 vec3 originPos = reconstructViewPos(vTextureCoord, originRawDepth);
 
-                // Approximate local surface normal from the reconstructed position of the four
-                // immediate neighbours — the only "normal" information obtainable from a depth
-                // buffer alone. Using one-sided differences (and picking the smaller jump on each
-                // axis) rather than a symmetric dFdx/dFdy avoids sampling across silhouette edges,
-                // where a central difference would straddle the object and the background and
-                // produce a garbage normal (visible as a dark outline around every object).
-                vec2 uvL = vTextureCoord - vec2(texelSize.x, 0.0);
-                vec2 uvR = vTextureCoord + vec2(texelSize.x, 0.0);
-                vec2 uvD = vTextureCoord - vec2(0.0, texelSize.y);
-                vec2 uvU = vTextureCoord + vec2(0.0, texelSize.y);
-
-                vec3 posL = reconstructViewPos(uvL, texture(sDepth, uvL).r);
-                vec3 posR = reconstructViewPos(uvR, texture(sDepth, uvR).r);
-                vec3 posD = reconstructViewPos(uvD, texture(sDepth, uvD).r);
-                vec3 posU = reconstructViewPos(uvU, texture(sDepth, uvU).r);
-
-                vec3 ddxL = originPos - posL;
-                vec3 ddxR = posR - originPos;
-                vec3 ddx = (abs(ddxL.z) < abs(ddxR.z)) ? ddxL : ddxR;
-
-                vec3 ddyD = originPos - posD;
-                vec3 ddyU = posU - originPos;
-                vec3 ddy = (abs(ddyD.z) < abs(ddyU.z)) ? ddyD : ddyU;
-
-                // View-space camera looks down -Z, so a surface facing the camera has normal.z > 0
-                vec3 normal = normalize(cross(ddx, ddy));
+                vec3 normal = depthToNormal(vTextureCoord, originRawDepth, originPos);
+                // vec3 normal = depthToNormal2(vTextureCoord, originRawDepth);
 
                 // TODO: precalculate these sin+cos tables in JavaScript and pass as small FP32/FP16 texture or hardcoded matrix
 
@@ -5505,7 +5532,7 @@ class Renderer extends BaseRenderer {
             [-0.9000, 3.8, -9.3260]
         ];
         /** AO render target size as a fraction of the canvas size. */
-        this.AO_SCALE = 0.5;
+        this.AO_SCALE = 0.4;
         this.aoWidth = 600;
         this.aoHeight = 400;
         this.cameraPositionInterpolator.speed = this.CAMERA_SPEED;
@@ -5828,7 +5855,7 @@ class Renderer extends BaseRenderer {
         this.gl.uniformMatrix4fv(this.shaderSsao.invProjMatrix, false, this.mInverseProjMatrix);
         this.gl.uniform2f(this.shaderSsao.texelSize, 1 / this.aoWidth, 1 / this.aoHeight);
         // higher radius require more samples to avoid noise, but allows to capture occlusion from farther away geometry.
-        this.gl.uniform1f(this.shaderSsao.radius, 25.0);
+        this.gl.uniform1f(this.shaderSsao.radius, 20.0);
         // higher depth range causes more haloing artifacts around geometries close to each other.
         this.gl.uniform1f(this.shaderSsao.depthRange, 14.0);
         // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "ligher" AO output.

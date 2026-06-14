@@ -53,12 +53,12 @@ export class SsaoShader extends BaseShader {
 
             ${ShaderCommonFunctions.RANDOM}
 
-            const int SAMPLES = 7;
+            const int SAMPLES = 10;
             const float GOLDEN_ANGLE = 2.39996323; // ~137.5 degrees, gives a well distributed spiral
 
             // Reconstructs view-space position from a depth buffer sample at the given UV
             vec3 reconstructViewPos(vec2 uv, float rawDepth) {
-                vec4 ndc = vec4(uv * 2.0 - 1.0, rawDepth * 2.0 - 1.0, 1.0);
+                vec4 ndc = vec4(vec3(uv, rawDepth) * 2.0 - 1.0, 1.0);
                 vec4 viewPos = invProjMatrix * ndc;
                 return viewPos.xyz / viewPos.w;
             }
@@ -70,15 +70,23 @@ export class SsaoShader extends BaseShader {
                 // axis) rather than a symmetric dFdx/dFdy avoids sampling across silhouette edges,
                 // where a central difference would straddle the object and the background and
                 // produce a garbage normal (visible as a dark outline around every object).
-                vec2 uvL = vTextureCoord - vec2(texelSize.x, 0.0);
-                vec2 uvR = vTextureCoord + vec2(texelSize.x, 0.0);
-                vec2 uvD = vTextureCoord - vec2(0.0, texelSize.y);
-                vec2 uvU = vTextureCoord + vec2(0.0, texelSize.y);
 
-                vec3 posL = reconstructViewPos(uvL, texture(sDepth, uvL).r);
-                vec3 posR = reconstructViewPos(uvR, texture(sDepth, uvR).r);
-                vec3 posD = reconstructViewPos(uvD, texture(sDepth, uvD).r);
-                vec3 posU = reconstructViewPos(uvU, texture(sDepth, uvU).r);
+                // vec2 uvL = vTextureCoord + vec2(-texelSize.x, 0.0);
+                // vec2 uvR = vTextureCoord + vec2(texelSize.x, 0.0);
+                // vec2 uvD = vTextureCoord + vec2(0.0, -texelSize.y);
+                // vec2 uvU = vTextureCoord + vec2(0.0, texelSize.y);
+
+                vec4 uvLR = vec4(vTextureCoord, vTextureCoord) + vec4(-texelSize.x, 0.0, texelSize.x, 0.0);
+                vec4 uvUD = vec4(vTextureCoord, vTextureCoord) + vec4(0.0, -texelSize.y, 0.0, texelSize.y);
+                vec2 uvL = uvLR.xy;
+                vec2 uvR = uvLR.zw;
+                vec2 uvD = uvUD.xy;
+                vec2 uvU = uvUD.zw;
+
+                vec3 posL = reconstructViewPos(uvL, texture(sDepth, uvL).x);
+                vec3 posR = reconstructViewPos(uvR, texture(sDepth, uvR).x);
+                vec3 posD = reconstructViewPos(uvD, texture(sDepth, uvD).x);
+                vec3 posU = reconstructViewPos(uvU, texture(sDepth, uvU).x);
 
                 vec3 ddxL = originPos - posL;
                 vec3 ddxR = posR - originPos;
