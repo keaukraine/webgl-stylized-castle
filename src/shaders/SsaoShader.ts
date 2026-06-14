@@ -53,7 +53,7 @@ export class SsaoShader extends BaseShader {
 
             ${ShaderCommonFunctions.RANDOM}
 
-            const int SAMPLES = 10;
+            const int SAMPLES = 7;
             const float GOLDEN_ANGLE = 2.39996323; // ~137.5 degrees, gives a well distributed spiral
 
             // Reconstructs view-space position from a depth buffer sample at the given UV
@@ -63,17 +63,7 @@ export class SsaoShader extends BaseShader {
                 return viewPos.xyz / viewPos.w;
             }
 
-            void main() {
-                float originRawDepth = texture(sDepth, vTextureCoord).r;
-
-                // Background (cleared depth = far plane): nothing to occlude
-                if (originRawDepth > 0.9999) {
-                    fragColor = vec4(1.0);
-                    return;
-                }
-
-                vec3 originPos = reconstructViewPos(vTextureCoord, originRawDepth);
-
+            vec3 depthToNormal(vec2 vTextureCoord, float originRawDepth, vec3 originPos) {
                 // Approximate local surface normal from the reconstructed position of the four
                 // immediate neighbours — the only "normal" information obtainable from a depth
                 // buffer alone. Using one-sided differences (and picking the smaller jump on each
@@ -100,6 +90,35 @@ export class SsaoShader extends BaseShader {
 
                 // View-space camera looks down -Z, so a surface facing the camera has normal.z > 0
                 vec3 normal = normalize(cross(ddx, ddy));
+
+                return normal;
+            }
+
+            vec3 depthToNormal2(vec2 tc, float rawDepth) {
+                float depth = rawDepth;
+                vec4 clipSpace = vec4(tc * 2.0 - 1.0, depth, 1.0);
+                vec4 viewSpace = invProjMatrix * clipSpace;
+                viewSpace.xyz /= viewSpace.w;
+                vec3 pos = viewSpace.xyz;
+                vec3 n = normalize(cross(dFdx(pos), dFdy(pos)));
+                // n *= -1.0;
+
+                return n;
+            }
+
+            void main() {
+                float originRawDepth = texture(sDepth, vTextureCoord).r;
+
+                // Background (cleared depth = far plane): nothing to occlude
+                if (originRawDepth > 0.9999) {
+                    fragColor = vec4(1.0);
+                    return;
+                }
+
+                vec3 originPos = reconstructViewPos(vTextureCoord, originRawDepth);
+
+                vec3 normal = depthToNormal(vTextureCoord, originRawDepth, originPos);
+                // vec3 normal = depthToNormal2(vTextureCoord, originRawDepth);
 
                 // TODO: precalculate these sin+cos tables in JavaScript and pass as small FP32/FP16 texture or hardcoded matrix
 
