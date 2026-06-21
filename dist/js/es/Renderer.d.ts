@@ -82,10 +82,14 @@ export declare class Renderer extends BaseRenderer {
         shadowResolution: number;
         /** One of BlurSize, or -1 to disable blurring of the AO buffer entirely. */
         aoBlurMode: number;
-        /** Only used by BILATERAL_3/BILATERAL_5 blur modes. */
+        /** Only used by BILATERAL_3/BILATERAL_5 blur modes. Multiplies linearized (world-space) depth differences. */
         aoDepthSharpness: number;
         /** Debug: replace the final image with the (blurred) AO buffer. */
         showAoOnly: boolean;
+        ssaoRadius: number;
+        ssaoDepthRange: number;
+        ssaoBias: number;
+        ssaoIntensity: number;
     };
     private readyCallback;
     private textureOffscreenColor;

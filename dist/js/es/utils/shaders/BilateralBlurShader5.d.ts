@@ -10,6 +10,7 @@ import { GaussianBlurShader } from "./GaussianBlurShader";
 export declare class BilateralBlurShader5 extends GaussianBlurShader {
     sDepth: WebGLUniformLocation | undefined;
     depthSharpness: WebGLUniformLocation | undefined;
+    cameraNearFar: WebGLUniformLocation | undefined;
     protected getKernel(): string;
     /** @inheritdoc */
     fillCode(): void;

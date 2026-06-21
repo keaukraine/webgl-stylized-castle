@@ -58,8 +58,10 @@ export declare class GaussianBlurRenderPass {
      *     Must be the same size as the texture being blurred.
      * @param depthSharpness Edge-preservation strength for bilateral kernels: 0 behaves like a
      *     regular Gaussian blur, higher values reject taps across depth discontinuities more strictly.
+     * @param cameraNearFar Near/far planes of the projection used to render depthTexture, needed to
+     *     linearize its (non-linear) values before comparing them. Required by bilateral kernels.
      */
-    blur(brightness: number, size: BlurSize, depthTexture?: WebGLTexture, depthSharpness?: number): void;
+    blur(brightness: number, size: BlurSize, depthTexture?: WebGLTexture, depthSharpness?: number, cameraNearFar?: readonly [number, number]): void;
     /**
      * Logs GL error to console.
      *

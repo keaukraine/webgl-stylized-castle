@@ -133,11 +133,19 @@ export class Renderer extends BaseRenderer {
         shadowResolution: 2,
 
         /** One of BlurSize, or -1 to disable blurring of the AO buffer entirely. */
-        aoBlurMode: BlurSize.BILATERAL_3 as number,
-        /** Only used by BILATERAL_3/BILATERAL_5 blur modes. */
-        aoDepthSharpness: 20.0,
+        aoBlurMode: BlurSize.KERNEL_2 as number,
+        /** Only used by BILATERAL_3/BILATERAL_5 blur modes. Multiplies linearized (world-space) depth differences. */
+        aoDepthSharpness: 0.1,
         /** Debug: replace the final image with the (blurred) AO buffer. */
-        showAoOnly: false
+        showAoOnly: false,
+
+        // higher radius require more samples to avoid noise, but allows to capture occlusion from farther away geometry.
+        ssaoRadius: 20.0,
+        // higher depth range causes more haloing artifacts around geometries close to each other.
+        ssaoDepthRange: 14.0,
+        // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "lighter" AO output.
+        ssaoBias: 0.0,
+        ssaoIntensity: 1.3
     };
 
     private readyCallback: (() => void) | undefined;
@@ -535,7 +543,7 @@ export class Renderer extends BaseRenderer {
                 // offscreen textures, not into fboAoDepth, so there's no feedback loop.
                 // higher depthSharpness rejects taps across depth discontinuities more aggressively,
                 // reducing AO bleeding across silhouette edges at the cost of slightly more noise there.
-                this.aoBlurPass?.blur(1.0, this.config.aoBlurMode as BlurSize, this.textureAoDepth, this.config.aoDepthSharpness);
+                this.aoBlurPass?.blur(1.0, this.config.aoBlurMode as BlurSize, this.textureAoDepth, this.config.aoDepthSharpness, [this.Z_NEAR, this.Z_FAR]);
             }
         }
 
@@ -585,13 +593,10 @@ export class Renderer extends BaseRenderer {
         this.setTexture2D(0, this.textureAoDepth!, this.shaderSsao.sDepth!);
         this.gl.uniformMatrix4fv(this.shaderSsao.invProjMatrix!, false, this.mInverseProjMatrix);
         this.gl.uniform2f(this.shaderSsao.texelSize!, 1 / this.aoWidth, 1 / this.aoHeight);
-        // higher radius require more samples to avoid noise, but allows to capture occlusion from farther away geometry.
-        this.gl.uniform1f(this.shaderSsao.radius!, 20.0);
-        // higher depth range causes more haloing artifacts around geometries close to each other.
-        this.gl.uniform1f(this.shaderSsao.depthRange!, 14.0);
-        // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "ligher" AO output.
-        this.gl.uniform1f(this.shaderSsao.bias!, 0.0);
-        this.gl.uniform1f(this.shaderSsao.intensity!, 1.3);
+        this.gl.uniform1f(this.shaderSsao.radius!, this.config.ssaoRadius);
+        this.gl.uniform1f(this.shaderSsao.depthRange!, this.config.ssaoDepthRange);
+        this.gl.uniform1f(this.shaderSsao.bias!, this.config.ssaoBias);
+        this.gl.uniform1f(this.shaderSsao.intensity!, this.config.ssaoIntensity);
 
         this.drawVignette(this.shaderSsao);
 

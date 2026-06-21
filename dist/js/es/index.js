@@ -4386,19 +4386,32 @@ const float WEIGHTS[5] = float[5](
 
             ${this.getKernel()}
 
+            // Raw depth-buffer values are non-linear (precision concentrated near the camera),
+            // so two points that look close on screen can have wildly different raw depth deltas
+            // depending on how far they are from the camera, and conversely two points far apart
+            // in world space can end up with a near-zero raw depth delta once distant enough.
+            // Comparing raw depth directly is therefore unusable as an edge detector; linearizing
+            // it into view-space distance first makes the comparison scale-invariant.
+            float linearizeDepth(float depth, vec2 cameraNearFar) {
+                float ndc = depth * 2.0 - 1.0;
+                return (2.0 * cameraNearFar.x * cameraNearFar.y) / (cameraNearFar.y + cameraNearFar.x - ndc * (cameraNearFar.y - cameraNearFar.x));
+            }
+
             // blurDirection is:
             //     vec2(1,0) for horizontal pass
             //     vec2(0,1) for vertical pass
             // The sourceTexture to be blurred MUST use linear filtering!
             // pixelCoord is in [0..1]
             // depthTexture must be the same size as sourceTexture.
+            // cameraNearFar is (near, far) of the projection used to render depthTexture, needed to
+            // linearize its values.
             // depthSharpness controls how aggressively taps across depth discontinuities are
             // rejected: 0 disables edge-awareness (falls back to a regular Gaussian blur),
             // higher values preserve edges more strictly at the cost of more noise.
-            mediump vec4 blur(in sampler2D sourceTexture, in sampler2D depthTexture, vec2 blurDirection, vec2 pixelCoord, float depthSharpness)
+            mediump vec4 blur(in sampler2D sourceTexture, in sampler2D depthTexture, vec2 blurDirection, vec2 pixelCoord, float depthSharpness, vec2 cameraNearFar)
             {
                 vec2 size = vec2(textureSize(sourceTexture, 0));
-                float centerDepth = texture(depthTexture, pixelCoord).r;
+                float centerDepth = linearizeDepth(texture(depthTexture, pixelCoord).r, cameraNearFar);
 
                 mediump vec4 result = vec4(0.0);
                 float totalWeight = 0.0;
@@ -4407,7 +4420,7 @@ const float WEIGHTS[5] = float[5](
                     vec2 offset = blurDirection * OFFSETS[i] / size;
                     vec2 sampleCoord = pixelCoord + offset;
 
-                    float sampleDepth = texture(depthTexture, sampleCoord).r;
+                    float sampleDepth = linearizeDepth(texture(depthTexture, sampleCoord).r, cameraNearFar);
                     float depthDiff = (sampleDepth - centerDepth) * depthSharpness;
                     float weight = WEIGHTS[i] / (1.0 + depthDiff * depthDiff);
 
@@ -4423,10 +4436,11 @@ const float WEIGHTS[5] = float[5](
             uniform vec2 direction;
             uniform mediump float brightness;
             uniform float depthSharpness;
+            uniform vec2 cameraNearFar;
             out mediump vec4 fragColor;
 
             void main() {
-                fragColor = blur(sTexture, sDepth, direction, vTextureCoord, depthSharpness);
+                fragColor = blur(sTexture, sDepth, direction, vTextureCoord, depthSharpness, cameraNearFar);
                 fragColor *= brightness;
             }`;
     }
@@ -4435,6 +4449,7 @@ const float WEIGHTS[5] = float[5](
         super.fillUniformsAttributes();
         this.sDepth = this.getUniform("sDepth");
         this.depthSharpness = this.getUniform("depthSharpness");
+        this.cameraNearFar = this.getUniform("cameraNearFar");
     }
 }
 
@@ -4570,8 +4585,10 @@ class GaussianBlurRenderPass {
      *     Must be the same size as the texture being blurred.
      * @param depthSharpness Edge-preservation strength for bilateral kernels: 0 behaves like a
      *     regular Gaussian blur, higher values reject taps across depth discontinuities more strictly.
+     * @param cameraNearFar Near/far planes of the projection used to render depthTexture, needed to
+     *     linearize its (non-linear) values before comparing them. Required by bilateral kernels.
      */
-    blur(brightness, size, depthTexture, depthSharpness = 1.0) {
+    blur(brightness, size, depthTexture, depthSharpness = 1.0, cameraNearFar) {
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
         this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, null);
         this.gl.disable(this.gl.BLEND);
@@ -4581,6 +4598,9 @@ class GaussianBlurRenderPass {
         if (shader.sDepth !== undefined && depthTexture !== undefined) {
             this.setTexture2D(1, depthTexture, shader.sDepth);
             this.gl.uniform1f(shader.depthSharpness, depthSharpness);
+            if (shader.cameraNearFar !== undefined && cameraNearFar !== undefined) {
+                this.gl.uniform2f(shader.cameraNearFar, cameraNearFar[0], cameraNearFar[1]);
+            }
         }
         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboOffscreenVert.framebufferHandle);
         this.gl.viewport(0, 0, this.width, this.height);
@@ -5640,11 +5660,18 @@ class Renderer extends BaseRenderer {
             timeOfDay: 0,
             shadowResolution: 2,
             /** One of BlurSize, or -1 to disable blurring of the AO buffer entirely. */
-            aoBlurMode: BlurSize.BILATERAL_3,
-            /** Only used by BILATERAL_3/BILATERAL_5 blur modes. */
-            aoDepthSharpness: 20.0,
+            aoBlurMode: BlurSize.KERNEL_2,
+            /** Only used by BILATERAL_3/BILATERAL_5 blur modes. Multiplies linearized (world-space) depth differences. */
+            aoDepthSharpness: 0.1,
             /** Debug: replace the final image with the (blurred) AO buffer. */
-            showAoOnly: false
+            showAoOnly: false,
+            // higher radius require more samples to avoid noise, but allows to capture occlusion from farther away geometry.
+            ssaoRadius: 20.0,
+            // higher depth range causes more haloing artifacts around geometries close to each other.
+            ssaoDepthRange: 14.0,
+            // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "lighter" AO output.
+            ssaoBias: 0.0,
+            ssaoIntensity: 1.3
         };
         this.SHADOWMAP_SIZE = 1024 * 2.0; // can be reduced to 1.3 with still OK quality
         this.SHADOWMAP_TEXEL_OFFSET_SCALE = 0.666;
@@ -5965,7 +5992,7 @@ class Renderer extends BaseRenderer {
                 // offscreen textures, not into fboAoDepth, so there's no feedback loop.
                 // higher depthSharpness rejects taps across depth discontinuities more aggressively,
                 // reducing AO bleeding across silhouette edges at the cost of slightly more noise there.
-                (_b = this.aoBlurPass) === null || _b === void 0 ? void 0 : _b.blur(1.0, this.config.aoBlurMode, this.textureAoDepth, this.config.aoDepthSharpness);
+                (_b = this.aoBlurPass) === null || _b === void 0 ? void 0 : _b.blur(1.0, this.config.aoBlurMode, this.textureAoDepth, this.config.aoDepthSharpness, [this.Z_NEAR, this.Z_FAR]);
             }
         }
         this.gl.colorMask(true, true, true, true);
@@ -6004,13 +6031,10 @@ class Renderer extends BaseRenderer {
         this.setTexture2D(0, this.textureAoDepth, this.shaderSsao.sDepth);
         this.gl.uniformMatrix4fv(this.shaderSsao.invProjMatrix, false, this.mInverseProjMatrix);
         this.gl.uniform2f(this.shaderSsao.texelSize, 1 / this.aoWidth, 1 / this.aoHeight);
-        // higher radius require more samples to avoid noise, but allows to capture occlusion from farther away geometry.
-        this.gl.uniform1f(this.shaderSsao.radius, 20.0);
-        // higher depth range causes more haloing artifacts around geometries close to each other.
-        this.gl.uniform1f(this.shaderSsao.depthRange, 14.0);
-        // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "ligher" AO output.
-        this.gl.uniform1f(this.shaderSsao.bias, 0.0);
-        this.gl.uniform1f(this.shaderSsao.intensity, 1.3);
+        this.gl.uniform1f(this.shaderSsao.radius, this.config.ssaoRadius);
+        this.gl.uniform1f(this.shaderSsao.depthRange, this.config.ssaoDepthRange);
+        this.gl.uniform1f(this.shaderSsao.bias, this.config.ssaoBias);
+        this.gl.uniform1f(this.shaderSsao.intensity, this.config.ssaoIntensity);
         this.drawVignette(this.shaderSsao);
         this.gl.depthMask(true);
         this.gl.enable(this.gl.DEPTH_TEST);
@@ -9097,6 +9121,14 @@ function initUI() {
     })
         .name("Camera")
         .onChange(value => renderer.setCameraMode(+value));
+    gui.add(renderer.config, "ssaoRadius", 0, 100, 1)
+        .name("SSAO radius");
+    gui.add(renderer.config, "ssaoDepthRange", 0, 50, 0.5)
+        .name("SSAO depth range");
+    gui.add(renderer.config, "ssaoBias", 0, 1, 0.01)
+        .name("SSAO bias");
+    gui.add(renderer.config, "ssaoIntensity", 0, 5, 0.1)
+        .name("SSAO intensity");
     gui.add(renderer.config, "aoBlurMode", {
         "None": -1,
         "KERNEL_2": BlurSize.KERNEL_2,
@@ -9106,7 +9138,7 @@ function initUI() {
     })
         .name("AO blur mode")
         .onChange(value => renderer.config.aoBlurMode = +value);
-    gui.add(renderer.config, "aoDepthSharpness", 0, 200)
+    gui.add(renderer.config, "aoDepthSharpness", 0, 2, 0.01)
         .name("AO blur depth sharpness");
     gui.add(renderer.config, "showAoOnly").name("Show AO only");
     gui.add(dummyConfig, "github").name("Source at Github");

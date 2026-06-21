@@ -91,6 +91,18 @@ function initUI(): void {
         .name("Camera")
         .onChange(value => renderer.setCameraMode(+value));
 
+    gui.add(renderer.config, "ssaoRadius", 0, 100, 1)
+        .name("SSAO radius");
+
+    gui.add(renderer.config, "ssaoDepthRange", 0, 50, 0.5)
+        .name("SSAO depth range");
+
+    gui.add(renderer.config, "ssaoBias", 0, 1, 0.01)
+        .name("SSAO bias");
+
+    gui.add(renderer.config, "ssaoIntensity", 0, 5, 0.1)
+        .name("SSAO intensity");
+
     gui.add(
         renderer.config,
         "aoBlurMode",
@@ -105,7 +117,7 @@ function initUI(): void {
         .name("AO blur mode")
         .onChange(value => renderer.config.aoBlurMode = +value);
 
-    gui.add(renderer.config, "aoDepthSharpness", 0, 200)
+    gui.add(renderer.config, "aoDepthSharpness", 0, 2, 0.01)
         .name("AO blur depth sharpness");
 
     gui.add(renderer.config, "showAoOnly").name("Show AO only");

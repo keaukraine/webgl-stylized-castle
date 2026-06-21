@@ -163,8 +163,10 @@ export class GaussianBlurRenderPass {
      *     Must be the same size as the texture being blurred.
      * @param depthSharpness Edge-preservation strength for bilateral kernels: 0 behaves like a
      *     regular Gaussian blur, higher values reject taps across depth discontinuities more strictly.
+     * @param cameraNearFar Near/far planes of the projection used to render depthTexture, needed to
+     *     linearize its (non-linear) values before comparing them. Required by bilateral kernels.
      */
-    public blur(brightness: number, size: BlurSize, depthTexture?: WebGLTexture, depthSharpness = 1.0): void {
+    public blur(brightness: number, size: BlurSize, depthTexture?: WebGLTexture, depthSharpness = 1.0, cameraNearFar?: readonly [number, number]): void {
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
         this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, null);
 
@@ -178,6 +180,9 @@ export class GaussianBlurRenderPass {
         if (shader.sDepth !== undefined && depthTexture !== undefined) {
             this.setTexture2D(1, depthTexture, shader.sDepth);
             this.gl.uniform1f(shader.depthSharpness!, depthSharpness);
+            if (shader.cameraNearFar !== undefined && cameraNearFar !== undefined) {
+                this.gl.uniform2f(shader.cameraNearFar, cameraNearFar[0], cameraNearFar[1]);
+            }
         }
 
         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboOffscreenVert!.framebufferHandle);
