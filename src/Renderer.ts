@@ -524,7 +524,7 @@ export class Renderer extends BaseRenderer {
             this.aoBlurPass?.switchToOffscreenFBO();
             this.drawSsaoPass();
             // this.aoBlurPass?.blitToTexture();
-            this.aoBlurPass?.blur(1.0, BlurSize.KERNEL_2);
+            // this.aoBlurPass?.blur(1.0, BlurSize.KERNEL_2);
             // this.aoBlurPass?.blur(1.0, BlurSize.KERNEL_2);
         }
 
@@ -541,7 +541,7 @@ export class Renderer extends BaseRenderer {
         this.drawCastleModels(false);
         this.drawWind();
 
-        // this.drawTestFullscreenQuad();
+        this.drawTestFullscreenQuad();
 
         this.framesCount++;
     }

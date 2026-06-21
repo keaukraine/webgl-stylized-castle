@@ -4,12 +4,16 @@ import { GaussianBlurShader4 } from "./shaders/GaussianBlurShader4";
 import { GaussianBlurShader3 } from "./shaders/GaussianBlurShader3";
 import { GaussianBlurShader2 } from "./shaders/GaussianBlurShader2";
 import { GaussianBlurShader1 } from "./shaders/GaussianBlurShader1";
+import { BilateralBlurShader5 } from "./shaders/BilateralBlurShader5";
+import { BilateralBlurShader3 } from "./shaders/BilateralBlurShader3";
 
 /**
  * Gaussian blur kernel size.
+ * BILATERAL_5/BILATERAL_3 are depth-aware (cross-bilateral) variants that avoid blurring
+ * across depth discontinuities; pass a depth texture to `blur()` to use them.
  */
 export enum BlurSize {
-    KERNEL_5, KERNEL_4, KERNEL_3, KERNEL_2
+    KERNEL_5, KERNEL_4, KERNEL_3, KERNEL_2, BILATERAL_5, BILATERAL_3
 }
 
 export interface RendertargetSize {
@@ -44,6 +48,9 @@ export class GaussianBlurRenderPass {
     private blurShader2: GaussianBlurShader;
     private blurShader1: GaussianBlurShader;
 
+    private blurShaderBilateral5: GaussianBlurShader;
+    private blurShaderBilateral3: GaussianBlurShader;
+
     constructor(protected gl: WebGL2RenderingContext, size: RendertargetSize) {
         const { width, height, minSize, ratio } = size;
         if (width !== undefined && height !== undefined) {
@@ -59,6 +66,9 @@ export class GaussianBlurRenderPass {
         this.blurShader3 = new GaussianBlurShader3(gl);
         this.blurShader2 = new GaussianBlurShader2(gl);
         this.blurShader1 = new GaussianBlurShader1(gl);
+
+        this.blurShaderBilateral5 = new BilateralBlurShader5(gl);
+        this.blurShaderBilateral3 = new BilateralBlurShader3(gl);
 
         this.textureOffscreen = TextureUtils.createNpotTexture(gl, this.width, this.height, false)!;
         this.fboOffscreen = new FrameBuffer(gl);
@@ -128,6 +138,10 @@ export class GaussianBlurRenderPass {
                 return this.blurShader4;
             case BlurSize.KERNEL_5:
                 return this.blurShader5;
+            case BlurSize.BILATERAL_5:
+                return this.blurShaderBilateral5;
+            case BlurSize.BILATERAL_3:
+                return this.blurShaderBilateral3;
         }
     }
 
@@ -144,7 +158,13 @@ export class GaussianBlurRenderPass {
         this.gl.uniform1i(uniform, textureUnit);
     }
 
-    public blur(brightness: number, size: BlurSize): void {
+    /**
+     * @param depthTexture Required by BILATERAL_5/BILATERAL_3, ignored by other kernel sizes.
+     *     Must be the same size as the texture being blurred.
+     * @param depthSharpness Edge-preservation strength for bilateral kernels: 0 behaves like a
+     *     regular Gaussian blur, higher values reject taps across depth discontinuities more strictly.
+     */
+    public blur(brightness: number, size: BlurSize, depthTexture?: WebGLTexture, depthSharpness = 1.0): void {
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
         this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, null);
 
@@ -154,6 +174,11 @@ export class GaussianBlurRenderPass {
 
         shader.use();
         this.gl.uniform1f(shader.brightness!, brightness);
+
+        if (shader.sDepth !== undefined && depthTexture !== undefined) {
+            this.setTexture2D(1, depthTexture, shader.sDepth);
+            this.gl.uniform1f(shader.depthSharpness!, depthSharpness);
+        }
 
         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboOffscreenVert!.framebufferHandle);
         this.gl.viewport(0, 0, this.width, this.height);
