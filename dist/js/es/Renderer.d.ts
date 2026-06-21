@@ -80,6 +80,12 @@ export declare class Renderer extends BaseRenderer {
         fogDistance: number;
         timeOfDay: number;
         shadowResolution: number;
+        /** One of BlurSize, or -1 to disable blurring of the AO buffer entirely. */
+        aoBlurMode: number;
+        /** Only used by BILATERAL_3/BILATERAL_5 blur modes. */
+        aoDepthSharpness: number;
+        /** Debug: replace the final image with the (blurred) AO buffer. */
+        showAoOnly: boolean;
     };
     private readyCallback;
     private textureOffscreenColor;

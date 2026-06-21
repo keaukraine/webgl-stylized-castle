@@ -4339,7 +4339,125 @@ const float WEIGHTS[2] = float[2](
 }
 
 /**
+ * Fast cross-bilateral blur shader.
+ * Blurs sTexture like a regular separable Gaussian blur, but additionally weighs each tap
+ * by how close its depth (sampled from sDepth) is to the center pixel's depth. This keeps
+ * the blur from mixing samples across depth discontinuities (e.g. AO bleeding/haloing
+ * across silhouette edges).
+ * Uses a 5-tap kernel (radius of 2 pixels).
+ */
+class BilateralBlurShader5 extends GaussianBlurShader {
+    getKernel() {
+        return `const int SAMPLE_COUNT = 5;
+const float OFFSETS[5] = float[5](-2.0, -1.0, 0.0, 1.0, 2.0);
+const float WEIGHTS[5] = float[5](
+    0.0625,
+    0.25,
+    0.375,
+    0.25,
+    0.0625
+);`;
+    }
+    /** @inheritdoc */
+    fillCode() {
+        this.vertexShaderCode = `#version 300 es
+            precision highp float;
+            out vec2 vTextureCoord;
+
+            const vec2 vertices[4] = vec2[4](
+              vec2(-1.0f, -1.0f),
+              vec2( 1.0f, -1.0f),
+              vec2(-1.0f,  1.0f),
+              vec2( 1.0f,  1.0f)
+            );
+            const vec2 uvs[4] = vec2[4](
+              vec2(0.0f, 0.0f),
+              vec2(1.0f, 0.0f),
+              vec2(0.0f, 1.0f),
+              vec2(1.0f, 1.0f)
+            );
+
+            void main() {
+              gl_Position = vec4(vertices[gl_VertexID], 0.0f, 1.0f);
+              vTextureCoord = uvs[gl_VertexID];
+            }`;
+        this.fragmentShaderCode = `#version 300 es
+            precision highp float;
+
+            ${this.getKernel()}
+
+            // blurDirection is:
+            //     vec2(1,0) for horizontal pass
+            //     vec2(0,1) for vertical pass
+            // The sourceTexture to be blurred MUST use linear filtering!
+            // pixelCoord is in [0..1]
+            // depthTexture must be the same size as sourceTexture.
+            // depthSharpness controls how aggressively taps across depth discontinuities are
+            // rejected: 0 disables edge-awareness (falls back to a regular Gaussian blur),
+            // higher values preserve edges more strictly at the cost of more noise.
+            mediump vec4 blur(in sampler2D sourceTexture, in sampler2D depthTexture, vec2 blurDirection, vec2 pixelCoord, float depthSharpness)
+            {
+                vec2 size = vec2(textureSize(sourceTexture, 0));
+                float centerDepth = texture(depthTexture, pixelCoord).r;
+
+                mediump vec4 result = vec4(0.0);
+                float totalWeight = 0.0;
+                for (int i = 0; i < SAMPLE_COUNT; ++i)
+                {
+                    vec2 offset = blurDirection * OFFSETS[i] / size;
+                    vec2 sampleCoord = pixelCoord + offset;
+
+                    float sampleDepth = texture(depthTexture, sampleCoord).r;
+                    float depthDiff = (sampleDepth - centerDepth) * depthSharpness;
+                    float weight = WEIGHTS[i] / (1.0 + depthDiff * depthDiff);
+
+                    result += texture(sourceTexture, sampleCoord) * weight;
+                    totalWeight += weight;
+                }
+                return result / max(totalWeight, 0.0001);
+            }
+
+            in vec2 vTextureCoord;
+            uniform sampler2D sTexture;
+            uniform sampler2D sDepth;
+            uniform vec2 direction;
+            uniform mediump float brightness;
+            uniform float depthSharpness;
+            out mediump vec4 fragColor;
+
+            void main() {
+                fragColor = blur(sTexture, sDepth, direction, vTextureCoord, depthSharpness);
+                fragColor *= brightness;
+            }`;
+    }
+    /** @inheritdoc */
+    fillUniformsAttributes() {
+        super.fillUniformsAttributes();
+        this.sDepth = this.getUniform("sDepth");
+        this.depthSharpness = this.getUniform("depthSharpness");
+    }
+}
+
+/**
+ * Fast cross-bilateral blur shader.
+ * Same as {@link BilateralBlurShader5}, but uses a cheaper 3-tap kernel (radius of 1 pixel).
+ */
+class BilateralBlurShader3 extends BilateralBlurShader5 {
+    getKernel() {
+        return `const int SAMPLE_COUNT = 3;
+const float OFFSETS[3] = float[3](-1.0, 0.0, 1.0);
+const float WEIGHTS[3] = float[3](
+    0.25,
+    0.5,
+    0.25
+);`;
+    }
+}
+
+/**
  * Gaussian blur kernel size.
+ * BILATERAL_5/BILATERAL_3 are depth-aware (cross-bilateral) variants that avoid blurring
+ * across depth discontinuities; pass a depth texture to `blur()` to use them.
  */
 var BlurSize;
 (function (BlurSize) {
@@ -4347,6 +4465,8 @@ var BlurSize;
     BlurSize[BlurSize["KERNEL_4"] = 1] = "KERNEL_4";
     BlurSize[BlurSize["KERNEL_3"] = 2] = "KERNEL_3";
     BlurSize[BlurSize["KERNEL_2"] = 3] = "KERNEL_2";
+    BlurSize[BlurSize["BILATERAL_5"] = 4] = "BILATERAL_5";
+    BlurSize[BlurSize["BILATERAL_3"] = 5] = "BILATERAL_3";
 })(BlurSize || (BlurSize = {}));
 /**
  * Helper class to render and blur off-screen targets.
@@ -4370,6 +4490,8 @@ class GaussianBlurRenderPass {
         this.blurShader3 = new GaussianBlurShader3(gl);
         this.blurShader2 = new GaussianBlurShader2(gl);
         this.blurShader1 = new GaussianBlurShader1(gl);
+        this.blurShaderBilateral5 = new BilateralBlurShader5(gl);
+        this.blurShaderBilateral3 = new BilateralBlurShader3(gl);
         this.textureOffscreen = TextureUtils.createNpotTexture(gl, this.width, this.height, false);
         this.fboOffscreen = new FrameBuffer(gl);
         this.fboOffscreen.textureHandle = this.textureOffscreen;
@@ -4425,6 +4547,10 @@ class GaussianBlurRenderPass {
                 return this.blurShader4;
             case BlurSize.KERNEL_5:
                 return this.blurShader5;
+            case BlurSize.BILATERAL_5:
+                return this.blurShaderBilateral5;
+            case BlurSize.BILATERAL_3:
+                return this.blurShaderBilateral3;
         }
     }
     /**
@@ -4439,13 +4565,23 @@ class GaussianBlurRenderPass {
         this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
         this.gl.uniform1i(uniform, textureUnit);
     }
-    blur(brightness, size) {
+    /**
+     * @param depthTexture Required by BILATERAL_5/BILATERAL_3, ignored by other kernel sizes.
+     *     Must be the same size as the texture being blurred.
+     * @param depthSharpness Edge-preservation strength for bilateral kernels: 0 behaves like a
+     *     regular Gaussian blur, higher values reject taps across depth discontinuities more strictly.
+     */
+    blur(brightness, size, depthTexture, depthSharpness = 1.0) {
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
         this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, null);
         this.gl.disable(this.gl.BLEND);
         let shader = this.getShader(size);
         shader.use();
         this.gl.uniform1f(shader.brightness, brightness);
+        if (shader.sDepth !== undefined && depthTexture !== undefined) {
+            this.setTexture2D(1, depthTexture, shader.sDepth);
+            this.gl.uniform1f(shader.depthSharpness, depthSharpness);
+        }
         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.fboOffscreenVert.framebufferHandle);
         this.gl.viewport(0, 0, this.width, this.height);
         this.gl.uniform2f(shader.direction, 0.0, 1.0);
@@ -5502,7 +5638,13 @@ class Renderer extends BaseRenderer {
             fogStartDistance: 500,
             fogDistance: 400,
             timeOfDay: 0,
-            shadowResolution: 2
+            shadowResolution: 2,
+            /** One of BlurSize, or -1 to disable blurring of the AO buffer entirely. */
+            aoBlurMode: BlurSize.BILATERAL_3,
+            /** Only used by BILATERAL_3/BILATERAL_5 blur modes. */
+            aoDepthSharpness: 20.0,
+            /** Debug: replace the final image with the (blurred) AO buffer. */
+            showAoOnly: false
         };
         this.SHADOWMAP_SIZE = 1024 * 2.0; // can be reduced to 1.3 with still OK quality
         this.SHADOWMAP_TEXEL_OFFSET_SCALE = 0.666;
@@ -5818,9 +5960,13 @@ class Renderer extends BaseRenderer {
         { // SSAO pass w/ blur
             (_a = this.aoBlurPass) === null || _a === void 0 ? void 0 : _a.switchToOffscreenFBO();
             this.drawSsaoPass();
-            // this.aoBlurPass?.blitToTexture();
-            (_b = this.aoBlurPass) === null || _b === void 0 ? void 0 : _b.blur(1.0, BlurSize.KERNEL_2);
-            // this.aoBlurPass?.blur(1.0, BlurSize.KERNEL_2);
+            if (this.config.aoBlurMode !== -1) {
+                // textureAoDepth is safe to sample here: this pass writes into aoBlurPass's own
+                // offscreen textures, not into fboAoDepth, so there's no feedback loop.
+                // higher depthSharpness rejects taps across depth discontinuities more aggressively,
+                // reducing AO bleeding across silhouette edges at the cost of slightly more noise there.
+                (_b = this.aoBlurPass) === null || _b === void 0 ? void 0 : _b.blur(1.0, this.config.aoBlurMode, this.textureAoDepth, this.config.aoDepthSharpness);
+            }
         }
         this.gl.colorMask(true, true, true, true);
         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null); // This differs from OpenGL ES
@@ -5832,7 +5978,9 @@ class Renderer extends BaseRenderer {
         this.positionCamera(this.timers.get(Timers.Camera));
         this.drawCastleModels(false);
         this.drawWind();
-        // this.drawTestFullscreenQuad();
+        if (this.config.showAoOnly) {
+            this.drawTestFullscreenQuad();
+        }
         this.framesCount++;
     }
     drawSsaoPass() {
@@ -8949,6 +9097,18 @@ function initUI() {
     })
         .name("Camera")
         .onChange(value => renderer.setCameraMode(+value));
+    gui.add(renderer.config, "aoBlurMode", {
+        "None": -1,
+        "KERNEL_2": BlurSize.KERNEL_2,
+        "KERNEL_3": BlurSize.KERNEL_3,
+        "BILATERAL_3": BlurSize.BILATERAL_3,
+        "BILATERAL_5": BlurSize.BILATERAL_5
+    })
+        .name("AO blur mode")
+        .onChange(value => renderer.config.aoBlurMode = +value);
+    gui.add(renderer.config, "aoDepthSharpness", 0, 200)
+        .name("AO blur depth sharpness");
+    gui.add(renderer.config, "showAoOnly").name("Show AO only");
     gui.add(dummyConfig, "github").name("Source at Github");
     gui.add(renderer, "fps").name("FPS").listen().domElement.style.pointerEvents = "none";
 }

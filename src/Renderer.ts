@@ -130,7 +130,14 @@ export class Renderer extends BaseRenderer {
         fogDistance: 400,
 
         timeOfDay: 0,
-        shadowResolution: 2
+        shadowResolution: 2,
+
+        /** One of BlurSize, or -1 to disable blurring of the AO buffer entirely. */
+        aoBlurMode: BlurSize.BILATERAL_3 as number,
+        /** Only used by BILATERAL_3/BILATERAL_5 blur modes. */
+        aoDepthSharpness: 20.0,
+        /** Debug: replace the final image with the (blurred) AO buffer. */
+        showAoOnly: false
     };
 
     private readyCallback: (() => void) | undefined;
@@ -523,9 +530,13 @@ export class Renderer extends BaseRenderer {
         { // SSAO pass w/ blur
             this.aoBlurPass?.switchToOffscreenFBO();
             this.drawSsaoPass();
-            // this.aoBlurPass?.blitToTexture();
-            // this.aoBlurPass?.blur(1.0, BlurSize.KERNEL_2);
-            // this.aoBlurPass?.blur(1.0, BlurSize.KERNEL_2);
+            if (this.config.aoBlurMode !== -1) {
+                // textureAoDepth is safe to sample here: this pass writes into aoBlurPass's own
+                // offscreen textures, not into fboAoDepth, so there's no feedback loop.
+                // higher depthSharpness rejects taps across depth discontinuities more aggressively,
+                // reducing AO bleeding across silhouette edges at the cost of slightly more noise there.
+                this.aoBlurPass?.blur(1.0, this.config.aoBlurMode as BlurSize, this.textureAoDepth, this.config.aoDepthSharpness);
+            }
         }
 
         this.gl.colorMask(true, true, true, true);
@@ -541,7 +552,9 @@ export class Renderer extends BaseRenderer {
         this.drawCastleModels(false);
         this.drawWind();
 
-        this.drawTestFullscreenQuad();
+        if (this.config.showAoOnly) {
+            this.drawTestFullscreenQuad();
+        }
 
         this.framesCount++;
     }

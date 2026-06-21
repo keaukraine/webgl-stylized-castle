@@ -2,6 +2,7 @@ import { FullScreenUtils } from "webgl-framework";
 import { Renderer } from "./Renderer";
 import { GUI } from 'dat.gui'
 import { CameraMode } from "./CameraMode";
+import { BlurSize } from "./utils/GaussianBlurRenderPass";
 
 function ready(fn: () => void) {
     if (document.readyState !== "loading") {
@@ -89,6 +90,25 @@ function initUI(): void {
     )
         .name("Camera")
         .onChange(value => renderer.setCameraMode(+value));
+
+    gui.add(
+        renderer.config,
+        "aoBlurMode",
+        {
+            "None": -1,
+            "KERNEL_2": BlurSize.KERNEL_2,
+            "KERNEL_3": BlurSize.KERNEL_3,
+            "BILATERAL_3": BlurSize.BILATERAL_3,
+            "BILATERAL_5": BlurSize.BILATERAL_5
+        }
+    )
+        .name("AO blur mode")
+        .onChange(value => renderer.config.aoBlurMode = +value);
+
+    gui.add(renderer.config, "aoDepthSharpness", 0, 200)
+        .name("AO blur depth sharpness");
+
+    gui.add(renderer.config, "showAoOnly").name("Show AO only");
 
     gui.add(dummyConfig, "github").name("Source at Github");
 

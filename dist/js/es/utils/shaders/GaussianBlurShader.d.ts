@@ -10,6 +10,10 @@ export declare class GaussianBlurShader extends BaseShader {
     direction: WebGLUniformLocation | undefined;
     rm_Vertex: number | undefined;
     rm_TexCoord0: number | undefined;
+    /** Only set by bilateral (depth-aware) blur shaders, e.g. {@link BilateralBlurShader5}. */
+    sDepth: WebGLUniformLocation | undefined;
+    /** Only set by bilateral (depth-aware) blur shaders, e.g. {@link BilateralBlurShader5}. */
+    depthSharpness: WebGLUniformLocation | undefined;
     protected getKernel(): string;
     /** @inheritdoc */
     fillCode(): void;
