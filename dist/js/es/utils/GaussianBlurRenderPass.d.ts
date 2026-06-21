@@ -2,6 +2,8 @@
  * Gaussian blur kernel size.
  * BILATERAL_5/BILATERAL_3 are depth-aware (cross-bilateral) variants that avoid blurring
  * across depth discontinuities; pass a depth texture to `blur()` to use them.
+ * BOX_5/BOX_3 are also depth-aware, but use uniform spatial weights and a hard depth cutoff
+ * instead of a smooth falloff: cheaper per-tap, but with more visible edges at depth discontinuities.
  */
 export declare enum BlurSize {
     KERNEL_5 = 0,
@@ -9,7 +11,9 @@ export declare enum BlurSize {
     KERNEL_3 = 2,
     KERNEL_2 = 3,
     BILATERAL_5 = 4,
-    BILATERAL_3 = 5
+    BILATERAL_3 = 5,
+    BOX_5 = 6,
+    BOX_3 = 7
 }
 export interface RendertargetSize {
     width?: number;
@@ -39,6 +43,8 @@ export declare class GaussianBlurRenderPass {
     private blurShader1;
     private blurShaderBilateral5;
     private blurShaderBilateral3;
+    private blurShaderBox5;
+    private blurShaderBox3;
     constructor(gl: WebGL2RenderingContext, size: RendertargetSize);
     switchToOffscreenFBO(): void;
     switchToOffscreenFBOMsaa(): void;

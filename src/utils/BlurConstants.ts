@@ -6,5 +6,7 @@ export const BLUR_SIZES = {
     "KERNEL_4": BlurSize.KERNEL_4,
     "KERNEL_5": BlurSize.KERNEL_5,
     "BILATERAL_3": BlurSize.BILATERAL_3,
-    "BILATERAL_5": BlurSize.BILATERAL_5
+    "BILATERAL_5": BlurSize.BILATERAL_5,
+    "BOX_5": BlurSize.BOX_5,
+    "BOX_3": BlurSize.BOX_3
 }

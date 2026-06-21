@@ -133,19 +133,19 @@ export class Renderer extends BaseRenderer {
         shadowResolution: 2,
 
         /** One of BlurSize, or -1 to disable blurring of the AO buffer entirely. */
-        aoBlurMode: BlurSize.KERNEL_2 as number,
+        aoBlurMode: BlurSize.KERNEL_3 as number,
         /** Only used by BILATERAL_3/BILATERAL_5 blur modes. Multiplies linearized (world-space) depth differences. */
         aoDepthSharpness: 0.1,
         /** Debug: replace the final image with the (blurred) AO buffer. */
         showAoOnly: false,
 
         // higher radius require more samples to avoid noise, but allows to capture occlusion from farther away geometry.
-        ssaoRadius: 20.0,
+        ssaoRadius: 18.0,
         // higher depth range causes more haloing artifacts around geometries close to each other.
         ssaoDepthRange: 14.0,
         // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "lighter" AO output.
         ssaoBias: 0.0,
-        ssaoIntensity: 1.3
+        ssaoIntensity: 1.2
     };
 
     private readyCallback: (() => void) | undefined;

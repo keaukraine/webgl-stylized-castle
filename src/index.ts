@@ -111,7 +111,9 @@ function initUI(): void {
             "KERNEL_2": BlurSize.KERNEL_2,
             "KERNEL_3": BlurSize.KERNEL_3,
             "BILATERAL_3": BlurSize.BILATERAL_3,
-            "BILATERAL_5": BlurSize.BILATERAL_5
+            "BILATERAL_5": BlurSize.BILATERAL_5,
+            "BOX_5": BlurSize.BOX_5,
+            "BOX_3": BlurSize.BOX_3
         }
     )
         .name("AO blur mode")

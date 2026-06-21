@@ -6,14 +6,18 @@ import { GaussianBlurShader2 } from "./shaders/GaussianBlurShader2";
 import { GaussianBlurShader1 } from "./shaders/GaussianBlurShader1";
 import { BilateralBlurShader5 } from "./shaders/BilateralBlurShader5";
 import { BilateralBlurShader3 } from "./shaders/BilateralBlurShader3";
+import { BoxBlurShader5 } from "./shaders/BoxBlurShader5";
+import { BoxBlurShader3 } from "./shaders/BoxBlurShader3";
 
 /**
  * Gaussian blur kernel size.
  * BILATERAL_5/BILATERAL_3 are depth-aware (cross-bilateral) variants that avoid blurring
  * across depth discontinuities; pass a depth texture to `blur()` to use them.
+ * BOX_5/BOX_3 are also depth-aware, but use uniform spatial weights and a hard depth cutoff
+ * instead of a smooth falloff: cheaper per-tap, but with more visible edges at depth discontinuities.
  */
 export enum BlurSize {
-    KERNEL_5, KERNEL_4, KERNEL_3, KERNEL_2, BILATERAL_5, BILATERAL_3
+    KERNEL_5, KERNEL_4, KERNEL_3, KERNEL_2, BILATERAL_5, BILATERAL_3, BOX_5, BOX_3
 }
 
 export interface RendertargetSize {
@@ -51,6 +55,9 @@ export class GaussianBlurRenderPass {
     private blurShaderBilateral5: GaussianBlurShader;
     private blurShaderBilateral3: GaussianBlurShader;
 
+    private blurShaderBox5: GaussianBlurShader;
+    private blurShaderBox3: GaussianBlurShader;
+
     constructor(protected gl: WebGL2RenderingContext, size: RendertargetSize) {
         const { width, height, minSize, ratio } = size;
         if (width !== undefined && height !== undefined) {
@@ -69,6 +76,9 @@ export class GaussianBlurRenderPass {
 
         this.blurShaderBilateral5 = new BilateralBlurShader5(gl);
         this.blurShaderBilateral3 = new BilateralBlurShader3(gl);
+
+        this.blurShaderBox5 = new BoxBlurShader5(gl);
+        this.blurShaderBox3 = new BoxBlurShader3(gl);
 
         this.textureOffscreen = TextureUtils.createNpotTexture(gl, this.width, this.height, false)!;
         this.fboOffscreen = new FrameBuffer(gl);
@@ -142,6 +152,10 @@ export class GaussianBlurRenderPass {
                 return this.blurShaderBilateral5;
             case BlurSize.BILATERAL_3:
                 return this.blurShaderBilateral3;
+            case BlurSize.BOX_5:
+                return this.blurShaderBox5;
+            case BlurSize.BOX_3:
+                return this.blurShaderBox3;
         }
     }
 
