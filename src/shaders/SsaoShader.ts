@@ -1,5 +1,4 @@
 import { BaseShader } from "webgl-framework";
-import { ShaderCommonFunctions } from "./ShaderCommonFunctions";
 
 /**
  * Screen-space ambient occlusion estimated from a depth-only buffer (no normals available).
@@ -88,7 +87,22 @@ export class SsaoShader extends BaseShader {
             // per-fragment cos/sin/sqrt (see SsaoShader.computeSampleOffsets).
             uniform mediump vec2 sampleOffsets[SAMPLES];
 
-            ${ShaderCommonFunctions.RANDOM}
+            // Per-pixel rotation of the sampling spiral, looked up from a tileable 4x4 pattern of
+            // random angles instead of hashing vTextureCoord + calling cos/sin every fragment.
+            // cos/sin of 16 random angles, precomputed in JS and hard-coded here - column-major,
+            // so cosRotations[x][y]/sinRotations[x][y] is the cos/sin of the angle for tile cell (x, y).
+            const mat4 cosRotations = mat4(
+                0.299081, -0.753322, -0.992612, 0.911186,
+                -0.290518, -0.398929, -0.649242, -0.532980,
+                0.893917, -0.344684, -0.967201, 0.942619,
+                -0.179674, -0.664920, -0.304750, 0.746066
+            );
+            const mat4 sinRotations = mat4(
+                -0.954228, 0.657652, -0.121331, -0.411996,
+                -0.956869, -0.916982, 0.760582, -0.846128,
+                0.448232, -0.938719, -0.254012, 0.333869,
+                0.983726, -0.746915, 0.952432, -0.665872
+            );
 
             // Reconstructs view-space position from a depth buffer sample at the given UV
             vec3 reconstructViewPos(vec2 uv, float rawDepth) {
@@ -164,14 +178,12 @@ export class SsaoShader extends BaseShader {
                 mediump vec3 normal = depthToNormal(vTextureCoord, originRawDepth, originPos);
                 // vec3 normal = depthToNormal2(vTextureCoord, originRawDepth);
 
-                // Per-pixel rotation of the sampling spiral to turn banding into less noticeable noise
-                // float rotation = random_vec2(mod(vTextureCoord, 0.003125)) * 6.28318530718; // FIXME: TEST - simulate very small (4x4) repetitive random texture or even matrix
-
-                // random_vec2's hash relies on highp range/precision internally (see ShaderCommonFunctions),
-                // but the resulting angle is smooth and bounded, so it can drop to mediump from here on.
-                mediump float rotation = random_vec2(vTextureCoord) * 6.28318530718;
-                mediump float cs = cos(rotation);
-                mediump float sn = sin(rotation);
+                // Per-pixel rotation of the sampling spiral to turn banding into less noticeable noise.
+                // Looked up from the precomputed 4x4 tile of cos/sin values above rather than hashing
+                // vTextureCoord and calling cos/sin per fragment.
+                ivec2 rotationTile = ivec2(mod(gl_FragCoord.xy, 4.0));
+                mediump float cs = cosRotations[rotationTile.x][rotationTile.y];
+                mediump float sn = sinRotations[rotationTile.x][rotationTile.y];
 
                 mediump float occlusion = 0.0;
                 mediump float totalWeight = 0.0;
