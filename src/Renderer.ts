@@ -598,6 +598,8 @@ export class Renderer extends BaseRenderer {
         this.gl.uniform1f(this.shaderSsao.bias!, this.config.ssaoBias);
         this.gl.uniform1f(this.shaderSsao.intensity!, this.config.ssaoIntensity);
 
+        this.gl.uniform2fv(this.shaderSsao!.sampleOffsets!, this.shaderSsao!.precomputedSampleOffsets);
+
         this.drawVignette(this.shaderSsao);
 
         this.gl.depthMask(true);

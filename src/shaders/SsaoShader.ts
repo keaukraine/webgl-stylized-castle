@@ -19,9 +19,40 @@ export class SsaoShader extends BaseShader {
     depthRange: WebGLUniformLocation | undefined;
     bias: WebGLUniformLocation | undefined;
     intensity: WebGLUniformLocation | undefined;
+    sampleOffsets: WebGLUniformLocation | undefined;
 
     rm_Vertex: number | undefined;
     rm_TexCoord0: number | undefined;
+
+    // Must match SAMPLES in the fragment shader below.
+    private static readonly SAMPLES = 10;
+    private static readonly GOLDEN_ANGLE = 2.39996323; // ~137.5 degrees, gives a well distributed spiral
+
+    private static sampleOffsetsBuffer: Float32Array | undefined;
+
+    public get precomputedSampleOffsets(): Float32Array {
+        if (SsaoShader.sampleOffsetsBuffer === undefined) {
+            SsaoShader.sampleOffsetsBuffer = SsaoShader.computeSampleOffsets();
+        }
+        return SsaoShader.sampleOffsetsBuffer;
+    }
+
+    /**
+     * Precomputes the spiral sampling offsets (direction * distance) used by the SSAO loop.
+     * These depend only on the sample index, so they're identical for every fragment - the Mali
+     * offline compiler flags the in-shader cos/sin/sqrt version as "uniform computation" (ALU work
+     * that's wastefully repeated per-fragment instead of being supplied as a uniform).
+     */
+    private static computeSampleOffsets(): Float32Array {
+        const offsets = new Float32Array(SsaoShader.SAMPLES * 2);
+        for (let i = 0; i < SsaoShader.SAMPLES; i++) {
+            const dist = Math.sqrt((i + 0.5) / SsaoShader.SAMPLES); // uniform distribution over a disk
+            const angle = i * SsaoShader.GOLDEN_ANGLE;
+            offsets[i * 2] = Math.cos(angle) * dist;
+            offsets[i * 2 + 1] = Math.sin(angle) * dist;
+        }
+        return offsets;
+    }
 
     fillCode() {
         this.vertexShaderCode = `#version 300 es
@@ -43,6 +74,8 @@ export class SsaoShader extends BaseShader {
             in vec2 vTextureCoord;
             out mediump vec4 fragColor;
 
+            const int SAMPLES = 10;
+
             uniform highp sampler2D sDepth;
             uniform highp mat4 invProjMatrix; // inverse of the projection matrix used to render sDepth; feeds depth reconstruction, needs full range/precision
             uniform mediump vec2 texelSize; // 1 / depth texture size, in texels
@@ -50,11 +83,12 @@ export class SsaoShader extends BaseShader {
             uniform mediump float depthRange; // view-space distance at which occlusion contribution fades to zero
             uniform mediump float bias; // minimal horizon cosine to count as occlusion (filters normal estimation noise)
             uniform mediump float intensity; // occlusion strength multiplier
+            // Precomputed (cos(i * goldenAngle), sin(i * goldenAngle)) * sqrt((i + 0.5) / SAMPLES) spiral
+            // offsets - identical for every fragment, so computed once on the CPU rather than with
+            // per-fragment cos/sin/sqrt (see SsaoShader.computeSampleOffsets).
+            uniform mediump vec2 sampleOffsets[SAMPLES];
 
             ${ShaderCommonFunctions.RANDOM}
-
-            const int SAMPLES = 10;
-            const float GOLDEN_ANGLE = 2.39996323; // ~137.5 degrees, gives a well distributed spiral
 
             // Reconstructs view-space position from a depth buffer sample at the given UV
             vec3 reconstructViewPos(vec2 uv, float rawDepth) {
@@ -130,8 +164,6 @@ export class SsaoShader extends BaseShader {
                 mediump vec3 normal = depthToNormal(vTextureCoord, originRawDepth, originPos);
                 // vec3 normal = depthToNormal2(vTextureCoord, originRawDepth);
 
-                // TODO: precalculate these sin+cos tables in JavaScript and pass as small FP32/FP16 texture or hardcoded matrix
-
                 // Per-pixel rotation of the sampling spiral to turn banding into less noticeable noise
                 // float rotation = random_vec2(mod(vTextureCoord, 0.003125)) * 6.28318530718; // FIXME: TEST - simulate very small (4x4) repetitive random texture or even matrix
 
@@ -145,16 +177,12 @@ export class SsaoShader extends BaseShader {
                 mediump float totalWeight = 0.0;
 
                 for (int i = 0; i < SAMPLES; i++) {
-                    mediump float t = (float(i) + 0.5) / float(SAMPLES);
-                    mediump float dist = sqrt(t); // uniform distribution over a disk
-                    mediump float angle = float(i) * GOLDEN_ANGLE;
-
-                    mediump vec2 dir = vec2(cos(angle), sin(angle));
+                    mediump vec2 dir = sampleOffsets[i];
                     // rotate sampling direction by the per-pixel random angle
                     mediump vec2 rotatedDir = vec2(dir.x * cs - dir.y * sn, dir.x * sn + dir.y * cs);
                     // sampleUV stays highp: vTextureCoord is highp, so this sum is evaluated at
                     // highp and feeds straight into the depth fetch + position reconstruction below.
-                    vec2 sampleUV = vTextureCoord + rotatedDir * dist * radius * texelSize;
+                    vec2 sampleUV = vTextureCoord + rotatedDir * radius * texelSize;
 
                     float sampleRawDepth = texture(sDepth, sampleUV).r;
                     vec3 samplePos = reconstructViewPos(sampleUV, sampleRawDepth);
@@ -201,6 +229,7 @@ export class SsaoShader extends BaseShader {
         this.depthRange = this.getUniform("depthRange");
         this.bias = this.getUniform("bias");
         this.intensity = this.getUniform("intensity");
+        this.sampleOffsets = this.getUniform("sampleOffsets");
 
         this.rm_Vertex = this.getAttrib("rm_Vertex");
         this.rm_TexCoord0 = this.getAttrib("rm_TexCoord0");

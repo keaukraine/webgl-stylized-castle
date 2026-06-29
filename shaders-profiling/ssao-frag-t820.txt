@@ -17,9 +17,9 @@ Uniform registers: 5 (31% used)
 Stack spilling: true
 
                                 A      LS       T    Bound
-Total instruction cycles:   77.00    2.00    7.00        A
+Total instruction cycles:   72.00    3.00    7.00        A
 Shortest path cycles:        2.50    1.00    1.00        A
-Longest path cycles:       150.00    2.00   15.00        A
+Longest path cycles:       130.25    7.00   15.00        A
 
 A = Arithmetic, LS = Load/Store, T = Texture
 
