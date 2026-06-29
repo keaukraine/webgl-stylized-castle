@@ -145,7 +145,7 @@ export class Renderer extends BaseRenderer {
         ssaoDepthRange: 14.0,
         // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "lighter" AO output.
         ssaoBias: 0.0,
-        ssaoIntensity: 1.2
+        ssaoIntensity: 1.1
     };
 
     private readyCallback: (() => void) | undefined;

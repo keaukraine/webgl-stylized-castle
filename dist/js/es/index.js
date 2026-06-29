@@ -5847,7 +5847,7 @@ class Renderer extends BaseRenderer {
             ssaoDepthRange: 14.0,
             // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "lighter" AO output.
             ssaoBias: 0.0,
-            ssaoIntensity: 1.2
+            ssaoIntensity: 1.1
         };
         this.SHADOWMAP_SIZE = 1024 * 2.0; // can be reduced to 1.3 with still OK quality
         this.SHADOWMAP_TEXEL_OFFSET_SCALE = 0.666;
