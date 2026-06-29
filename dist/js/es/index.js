@@ -4021,7 +4021,7 @@ class SsaoShader extends BaseShader {
 
             ${ShaderCommonFunctions.RANDOM}
 
-            const int SAMPLES = 7;
+            const int SAMPLES = 10;
             const float GOLDEN_ANGLE = 2.39996323; // ~137.5 degrees, gives a well distributed spiral
 
             // Reconstructs view-space position from a depth buffer sample at the given UV
@@ -4148,6 +4148,7 @@ class SsaoShader extends BaseShader {
                 // fragColor *= 0.0001; fragColor.rgb += normal;
                 // fragColor *= 0.0001; fragColor.rgb += vec3(rotation);
             }`;
+        console.log({ code: this.fragmentShaderCode });
     }
     fillUniformsAttributes() {
         this.view_proj_matrix = this.getUniform("view_proj_matrix");
@@ -5831,7 +5832,7 @@ class Renderer extends BaseRenderer {
             [-0.9000, 3.8, -9.3260]
         ];
         /** AO render target size as a fraction of the canvas size. */
-        this.AO_SCALE = 0.4;
+        this.AO_SCALE = 0.5;
         this.aoWidth = 600;
         this.aoHeight = 400;
         this.cameraPositionInterpolator.speed = this.CAMERA_SPEED;

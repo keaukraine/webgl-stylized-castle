@@ -1,0 +1,33 @@
+Mali Offline Compiler v8.8.1 (Build 73b41e)
+Copyright (c) 2007-2025 Arm Limited. All rights reserved.
+
+Configuration
+=============
+
+Hardware: Mali-T820 r1p0
+Architecture: Midgard
+Driver: r23p0-00rel0
+Shader type: OpenGL ES Fragment
+
+Main shader
+===========
+
+Work registers: 8 (100% used at 50% occupancy)
+Uniform registers: 6 (37% used)
+Stack spilling: false
+
+                                A      LS       T    Bound
+Total instruction cycles:   80.00    1.00    7.00        A
+Shortest path cycles:        2.50    1.00    1.00        A
+Longest path cycles:       158.50    1.00   15.00        A
+
+A = Arithmetic, LS = Load/Store, T = Texture
+
+Shader properties
+=================
+
+Has uniform computation: false
+
+Note: This tool shows only the shader-visible property state.
+API configuration may also impact the value of some properties.
+

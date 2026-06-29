@@ -1,43 +1,4 @@
-import { BaseShader } from "webgl-framework";
-import { ShaderCommonFunctions } from "./ShaderCommonFunctions";
-
-/**
- * Screen-space ambient occlusion estimated from a depth-only buffer (no normals available).
- *
- * Reconstructs view-space position from the depth buffer + inverse projection matrix, derives an
- * approximate surface normal from screen-space position derivatives, and performs a horizon/hemisphere
- * test in true 3D space. Working in 3D (rather than comparing raw or linearized depth values directly)
- * avoids depth-precision banding artifacts on sloped surfaces, since the comparison is naturally
- * scale- and precision-invariant.
- */
-export class SsaoShader extends BaseShader {
-    view_proj_matrix: WebGLUniformLocation | undefined;
-    sDepth: WebGLUniformLocation | undefined;
-    invProjMatrix: WebGLUniformLocation | undefined;
-    texelSize: WebGLUniformLocation | undefined;
-    radius: WebGLUniformLocation | undefined;
-    depthRange: WebGLUniformLocation | undefined;
-    bias: WebGLUniformLocation | undefined;
-    intensity: WebGLUniformLocation | undefined;
-
-    rm_Vertex: number | undefined;
-    rm_TexCoord0: number | undefined;
-
-    fillCode() {
-        this.vertexShaderCode = `#version 300 es
-            precision highp float;
-
-            uniform mat4 view_proj_matrix;
-            in vec4 rm_Vertex;
-            in vec2 rm_TexCoord0;
-            out vec2 vTextureCoord;
-
-            void main() {
-                gl_Position = view_proj_matrix * rm_Vertex;
-                vTextureCoord = rm_TexCoord0;
-            }`;
-
-        this.fragmentShaderCode = `#version 300 es
+#version 300 es
             precision highp float;
 
             in vec2 vTextureCoord;
@@ -51,7 +12,17 @@ export class SsaoShader extends BaseShader {
             uniform float bias; // minimal horizon cosine to count as occlusion (filters normal estimation noise)
             uniform float intensity; // occlusion strength multiplier
 
-            ${ShaderCommonFunctions.RANDOM}
+
+    /** From https://thebookofshaders.com/10/ */
+    float random_vec2 (vec2 st) {
+        return fract(sin(dot(st.xy,vec2(12.9898, 78.233))) * 43758.5453123);
+    }
+
+    /** Optimized version of the same random() from The Book of Shaders */
+    float random (float st) {
+        return fract(sin(st) * 43758.5453123);
+    }
+
 
             const int SAMPLES = 10;
             const float GOLDEN_ANGLE = 2.39996323; // ~137.5 degrees, gives a well distributed spiral
@@ -179,22 +150,4 @@ export class SsaoShader extends BaseShader {
                 // Debug: visualize the normal
                 // fragColor *= 0.0001; fragColor.rgb += normal;
                 // fragColor *= 0.0001; fragColor.rgb += vec3(rotation);
-            }`;
-
-            console.log({code: this.fragmentShaderCode});
-    }
-
-    fillUniformsAttributes() {
-        this.view_proj_matrix = this.getUniform("view_proj_matrix");
-        this.sDepth = this.getUniform("sDepth");
-        this.invProjMatrix = this.getUniform("invProjMatrix");
-        this.texelSize = this.getUniform("texelSize");
-        this.radius = this.getUniform("radius");
-        this.depthRange = this.getUniform("depthRange");
-        this.bias = this.getUniform("bias");
-        this.intensity = this.getUniform("intensity");
-
-        this.rm_Vertex = this.getAttrib("rm_Vertex");
-        this.rm_TexCoord0 = this.getAttrib("rm_TexCoord0");
-    }
-}
+            }

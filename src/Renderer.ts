@@ -205,7 +205,7 @@ export class Renderer extends BaseRenderer {
     protected freeMovement?: FreeMovement;
 
     /** AO render target size as a fraction of the canvas size. */
-    protected AO_SCALE = 0.4;
+    protected AO_SCALE = 0.5;
     protected aoWidth = 600;
     protected aoHeight = 400;
 
