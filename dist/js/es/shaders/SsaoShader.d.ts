@@ -13,7 +13,7 @@ export declare class SsaoShader extends BaseShader {
     sDepth: WebGLUniformLocation | undefined;
     invProjMatrix: WebGLUniformLocation | undefined;
     texelSize: WebGLUniformLocation | undefined;
-    radius: WebGLUniformLocation | undefined;
+    radiusTexelSize: WebGLUniformLocation | undefined;
     depthRange: WebGLUniformLocation | undefined;
     bias: WebGLUniformLocation | undefined;
     intensity: WebGLUniformLocation | undefined;

@@ -1,7 +1,7 @@
 #version 300 es
             precision highp float;
 
-            in vec2 vTextureCoord;
+            in mediump vec2 vTextureCoord;
             out mediump vec4 fragColor;
 
             const int SAMPLES = 10;
@@ -9,7 +9,7 @@
             uniform highp sampler2D sDepth;
             uniform highp mat4 invProjMatrix; // inverse of the projection matrix used to render sDepth; feeds depth reconstruction, needs full range/precision
             uniform mediump vec2 texelSize; // 1 / depth texture size, in texels
-            uniform mediump float radius; // sampling radius, in texels
+            uniform mediump vec2 radiusTexelSize; // texelSize * sampling radius, precomputed on CPU
             uniform mediump float depthRange; // view-space distance at which occlusion contribution fades to zero
             uniform mediump float bias; // minimal horizon cosine to count as occlusion (filters normal estimation noise)
             uniform mediump float intensity; // occlusion strength multiplier
@@ -22,13 +22,13 @@
             // random angles instead of hashing vTextureCoord + calling cos/sin every fragment.
             // cos/sin of 16 random angles, precomputed in JS and hard-coded here - column-major,
             // so cosRotations[x][y]/sinRotations[x][y] is the cos/sin of the angle for tile cell (x, y).
-            const mediump mat4 cosRotations = mat4(
+            const mat4 cosRotations = mat4(
                 0.299081, -0.753322, -0.992612, 0.911186,
                 -0.290518, -0.398929, -0.649242, -0.532980,
                 0.893917, -0.344684, -0.967201, 0.942619,
                 -0.179674, -0.664920, -0.304750, 0.746066
             );
-            const mediump mat4 sinRotations = mat4(
+            const mat4 sinRotations = mat4(
                 -0.954228, 0.657652, -0.121331, -0.411996,
                 -0.956869, -0.916982, 0.760582, -0.846128,
                 0.448232, -0.938719, -0.254012, 0.333869,
@@ -125,7 +125,7 @@
                     mediump vec2 rotatedDir = vec2(dir.x * cs - dir.y * sn, dir.x * sn + dir.y * cs);
                     // sampleUV stays highp: vTextureCoord is highp, so this sum is evaluated at
                     // highp and feeds straight into the depth fetch + position reconstruction below.
-                    vec2 sampleUV = vTextureCoord + rotatedDir * radius * texelSize;
+                    vec2 sampleUV = vTextureCoord + rotatedDir * radiusTexelSize;
 
                     float sampleRawDepth = texture(sDepth, sampleUV).r;
                     vec3 samplePos = reconstructViewPos(sampleUV, sampleRawDepth);

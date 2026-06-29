@@ -4021,7 +4021,7 @@ class SsaoShader extends BaseShader {
             uniform mat4 view_proj_matrix;
             in vec4 rm_Vertex;
             in vec2 rm_TexCoord0;
-            out vec2 vTextureCoord;
+            out mediump vec2 vTextureCoord;
 
             void main() {
                 gl_Position = view_proj_matrix * rm_Vertex;
@@ -4030,7 +4030,7 @@ class SsaoShader extends BaseShader {
         this.fragmentShaderCode = `#version 300 es
             precision highp float;
 
-            in vec2 vTextureCoord;
+            in mediump vec2 vTextureCoord;
             out mediump vec4 fragColor;
 
             const int SAMPLES = 10;
@@ -4038,7 +4038,7 @@ class SsaoShader extends BaseShader {
             uniform highp sampler2D sDepth;
             uniform highp mat4 invProjMatrix; // inverse of the projection matrix used to render sDepth; feeds depth reconstruction, needs full range/precision
             uniform mediump vec2 texelSize; // 1 / depth texture size, in texels
-            uniform mediump float radius; // sampling radius, in texels
+            uniform mediump vec2 radiusTexelSize; // texelSize * sampling radius, precomputed on CPU
             uniform mediump float depthRange; // view-space distance at which occlusion contribution fades to zero
             uniform mediump float bias; // minimal horizon cosine to count as occlusion (filters normal estimation noise)
             uniform mediump float intensity; // occlusion strength multiplier
@@ -4154,7 +4154,7 @@ class SsaoShader extends BaseShader {
                     mediump vec2 rotatedDir = vec2(dir.x * cs - dir.y * sn, dir.x * sn + dir.y * cs);
                     // sampleUV stays highp: vTextureCoord is highp, so this sum is evaluated at
                     // highp and feeds straight into the depth fetch + position reconstruction below.
-                    vec2 sampleUV = vTextureCoord + rotatedDir * radius * texelSize;
+                    vec2 sampleUV = vTextureCoord + rotatedDir * radiusTexelSize;
 
                     float sampleRawDepth = texture(sDepth, sampleUV).r;
                     vec3 samplePos = reconstructViewPos(sampleUV, sampleRawDepth);
@@ -4195,7 +4195,7 @@ class SsaoShader extends BaseShader {
         this.sDepth = this.getUniform("sDepth");
         this.invProjMatrix = this.getUniform("invProjMatrix");
         this.texelSize = this.getUniform("texelSize");
-        this.radius = this.getUniform("radius");
+        this.radiusTexelSize = this.getUniform("radiusTexelSize");
         this.depthRange = this.getUniform("depthRange");
         this.bias = this.getUniform("bias");
         this.intensity = this.getUniform("intensity");
@@ -6204,8 +6204,10 @@ class Renderer extends BaseRenderer {
         invert(this.mInverseProjMatrix, this.mProjMatrix);
         this.setTexture2D(0, this.textureAoDepth, this.shaderSsao.sDepth);
         this.gl.uniformMatrix4fv(this.shaderSsao.invProjMatrix, false, this.mInverseProjMatrix);
-        this.gl.uniform2f(this.shaderSsao.texelSize, 1 / this.aoWidth, 1 / this.aoHeight);
-        this.gl.uniform1f(this.shaderSsao.radius, this.config.ssaoRadius);
+        const aoTexelSizeX = 1 / this.aoWidth;
+        const aoTexelSizeY = 1 / this.aoHeight;
+        this.gl.uniform2f(this.shaderSsao.texelSize, aoTexelSizeX, aoTexelSizeY);
+        this.gl.uniform2f(this.shaderSsao.radiusTexelSize, this.config.ssaoRadius * aoTexelSizeX, this.config.ssaoRadius * aoTexelSizeY);
         this.gl.uniform1f(this.shaderSsao.depthRange, this.config.ssaoDepthRange);
         this.gl.uniform1f(this.shaderSsao.bias, this.config.ssaoBias);
         this.gl.uniform1f(this.shaderSsao.intensity, this.config.ssaoIntensity);

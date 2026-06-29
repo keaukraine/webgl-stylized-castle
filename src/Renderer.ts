@@ -592,8 +592,10 @@ export class Renderer extends BaseRenderer {
 
         this.setTexture2D(0, this.textureAoDepth!, this.shaderSsao.sDepth!);
         this.gl.uniformMatrix4fv(this.shaderSsao.invProjMatrix!, false, this.mInverseProjMatrix);
-        this.gl.uniform2f(this.shaderSsao.texelSize!, 1 / this.aoWidth, 1 / this.aoHeight);
-        this.gl.uniform1f(this.shaderSsao.radius!, this.config.ssaoRadius);
+        const aoTexelSizeX = 1 / this.aoWidth;
+        const aoTexelSizeY = 1 / this.aoHeight;
+        this.gl.uniform2f(this.shaderSsao.texelSize!, aoTexelSizeX, aoTexelSizeY);
+        this.gl.uniform2f(this.shaderSsao.radiusTexelSize!, this.config.ssaoRadius * aoTexelSizeX, this.config.ssaoRadius * aoTexelSizeY);
         this.gl.uniform1f(this.shaderSsao.depthRange!, this.config.ssaoDepthRange);
         this.gl.uniform1f(this.shaderSsao.bias!, this.config.ssaoBias);
         this.gl.uniform1f(this.shaderSsao.intensity!, this.config.ssaoIntensity);
