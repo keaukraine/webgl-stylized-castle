@@ -121,8 +121,10 @@
 
                 for (int i = 0; i < SAMPLES; i++) {
                     mediump vec2 dir = sampleOffsets[i];
+                    mediump vec2 dir_cs = dir * cs;
+                    mediump vec2 dir_sn = dir * sn;
                     // rotate sampling direction by the per-pixel random angle
-                    mediump vec2 rotatedDir = vec2(dir.x * cs - dir.y * sn, dir.x * sn + dir.y * cs);
+                    mediump vec2 rotatedDir = vec2(dir_cs.x - dir_sn.y, dir_sn.x + dir_cs.y);
                     // sampleUV stays highp: vTextureCoord is highp, so this sum is evaluated at
                     // highp and feeds straight into the depth fetch + position reconstruction below.
                     vec2 sampleUV = vTextureCoord + rotatedDir * radiusTexelSize;
