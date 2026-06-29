@@ -13,14 +13,14 @@ Main shader
 ===========
 
 Work registers: 31 (96% used at 100% occupancy)
-Uniform registers: 48 (37% used)
+Uniform registers: 46 (35% used)
 Stack use: false
-16-bit arithmetic: 0%
+16-bit arithmetic: 19%
 
                                 A      LS       V       T    Bound
-Total instruction cycles:    7.00    0.00    0.25    3.00        A
-Shortest path cycles:        0.33    0.00    0.25    0.50        T
-Longest path cycles:        28.00    0.00    0.25    7.50        A
+Total instruction cycles:    6.67    0.00    0.25    3.00        A
+Shortest path cycles:        0.29    0.00    0.25    0.50        T
+Longest path cycles:        25.33    0.00    0.25    7.50        A
 
 A = Arithmetic, LS = Load/Store, V = Varying, T = Texture
 

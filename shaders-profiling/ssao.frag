@@ -2,15 +2,15 @@
             precision highp float;
 
             in vec2 vTextureCoord;
-            out vec4 fragColor;
+            out mediump vec4 fragColor;
 
             uniform highp sampler2D sDepth;
-            uniform mat4 invProjMatrix; // inverse of the projection matrix used to render sDepth
-            uniform vec2 texelSize; // 1 / depth texture size, in texels
-            uniform float radius; // sampling radius, in texels
-            uniform float depthRange; // view-space distance at which occlusion contribution fades to zero
-            uniform float bias; // minimal horizon cosine to count as occlusion (filters normal estimation noise)
-            uniform float intensity; // occlusion strength multiplier
+            uniform highp mat4 invProjMatrix; // inverse of the projection matrix used to render sDepth; feeds depth reconstruction, needs full range/precision
+            uniform mediump vec2 texelSize; // 1 / depth texture size, in texels
+            uniform mediump float radius; // sampling radius, in texels
+            uniform mediump float depthRange; // view-space distance at which occlusion contribution fades to zero
+            uniform mediump float bias; // minimal horizon cosine to count as occlusion (filters normal estimation noise)
+            uniform mediump float intensity; // occlusion strength multiplier
 
 
     /** From https://thebookofshaders.com/10/ */
@@ -34,7 +34,9 @@
                 return viewPos.xyz / viewPos.w;
             }
 
-            vec3 depthToNormal(vec2 vTextureCoord, float originRawDepth, vec3 originPos) {
+            // Returns mediump: the highp position differences below already absorbed the
+            // precision-sensitive cancellation, so the resulting direction can be cheap.
+            mediump vec3 depthToNormal(vec2 vTextureCoord, float originRawDepth, vec3 originPos) {
                 // Approximate local surface normal from the reconstructed position of the four
                 // immediate neighbours — the only "normal" information obtainable from a depth
                 // buffer alone. Using one-sided differences (and picking the smaller jump on each
@@ -59,16 +61,16 @@
                 vec3 posD = reconstructViewPos(uvD, texture(sDepth, uvD).x);
                 vec3 posU = reconstructViewPos(uvU, texture(sDepth, uvU).x);
 
-                vec3 ddxL = originPos - posL;
-                vec3 ddxR = posR - originPos;
-                vec3 ddx = (abs(ddxL.z) < abs(ddxR.z)) ? ddxL : ddxR;
+                mediump vec3 ddxL = originPos - posL;
+                mediump vec3 ddxR = posR - originPos;
+                mediump vec3 ddx = (abs(ddxL.z) < abs(ddxR.z)) ? ddxL : ddxR;
 
-                vec3 ddyD = originPos - posD;
-                vec3 ddyU = posU - originPos;
-                vec3 ddy = (abs(ddyD.z) < abs(ddyU.z)) ? ddyD : ddyU;
+                mediump vec3 ddyD = originPos - posD;
+                mediump vec3 ddyU = posU - originPos;
+                mediump vec3 ddy = (abs(ddyD.z) < abs(ddyU.z)) ? ddyD : ddyU;
 
                 // View-space camera looks down -Z, so a surface facing the camera has normal.z > 0
-                vec3 normal = normalize(cross(ddx, ddy));
+                mediump vec3 normal = normalize(cross(ddx, ddy));
 
                 return normal;
             }
@@ -96,7 +98,7 @@
 
                 vec3 originPos = reconstructViewPos(vTextureCoord, originRawDepth);
 
-                vec3 normal = depthToNormal(vTextureCoord, originRawDepth, originPos);
+                mediump vec3 normal = depthToNormal(vTextureCoord, originRawDepth, originPos);
                 // vec3 normal = depthToNormal2(vTextureCoord, originRawDepth);
 
                 // TODO: precalculate these sin+cos tables in JavaScript and pass as small FP32/FP16 texture or hardcoded matrix
@@ -104,38 +106,44 @@
                 // Per-pixel rotation of the sampling spiral to turn banding into less noticeable noise
                 // float rotation = random_vec2(mod(vTextureCoord, 0.003125)) * 6.28318530718; // FIXME: TEST - simulate very small (4x4) repetitive random texture or even matrix
 
-                float rotation = random_vec2(vTextureCoord) * 6.28318530718;
-                float cs = cos(rotation);
-                float sn = sin(rotation);
+                // random_vec2's hash relies on highp range/precision internally (see ShaderCommonFunctions),
+                // but the resulting angle is smooth and bounded, so it can drop to mediump from here on.
+                mediump float rotation = random_vec2(vTextureCoord) * 6.28318530718;
+                mediump float cs = cos(rotation);
+                mediump float sn = sin(rotation);
 
-                float occlusion = 0.0;
-                float totalWeight = 0.0;
+                mediump float occlusion = 0.0;
+                mediump float totalWeight = 0.0;
 
                 for (int i = 0; i < SAMPLES; i++) {
-                    float t = (float(i) + 0.5) / float(SAMPLES);
-                    float dist = sqrt(t); // uniform distribution over a disk
-                    float angle = float(i) * GOLDEN_ANGLE;
+                    mediump float t = (float(i) + 0.5) / float(SAMPLES);
+                    mediump float dist = sqrt(t); // uniform distribution over a disk
+                    mediump float angle = float(i) * GOLDEN_ANGLE;
 
-                    vec2 dir = vec2(cos(angle), sin(angle));
+                    mediump vec2 dir = vec2(cos(angle), sin(angle));
                     // rotate sampling direction by the per-pixel random angle
-                    vec2 rotatedDir = vec2(dir.x * cs - dir.y * sn, dir.x * sn + dir.y * cs);
+                    mediump vec2 rotatedDir = vec2(dir.x * cs - dir.y * sn, dir.x * sn + dir.y * cs);
+                    // sampleUV stays highp: vTextureCoord is highp, so this sum is evaluated at
+                    // highp and feeds straight into the depth fetch + position reconstruction below.
                     vec2 sampleUV = vTextureCoord + rotatedDir * dist * radius * texelSize;
 
                     float sampleRawDepth = texture(sDepth, sampleUV).r;
                     vec3 samplePos = reconstructViewPos(sampleUV, sampleRawDepth);
 
-                    vec3 toSample = samplePos - originPos;
-                    float sampleDist = length(toSample);
-                    vec3 sampleDir = toSample / max(sampleDist, 0.0001);
+                    // The highp subtraction below already did the precision-sensitive cancellation,
+                    // so the resulting (small) vector and everything derived from it can be mediump.
+                    mediump vec3 toSample = samplePos - originPos;
+                    mediump float sampleDist = length(toSample);
+                    mediump vec3 sampleDir = toSample / max(sampleDist, 0.0001);
 
                     // How far the sample sits above the local tangent plane, towards the camera/normal:
                     // close to 0 for points on the same plane (no self-occlusion), positive for occluders
-                    float horizon = dot(normal, sampleDir) - bias;
+                    mediump float horizon = dot(normal, sampleDir) - bias;
 
                     // Fade out contributions from samples that are far away in 3D, so unrelated geometry
                     // (background, distant walls) doesn't produce false occlusion or dilute the average
                     // near silhouette edges
-                    float rangeCheck = 1.0 - smoothstep(0.0, depthRange, sampleDist);
+                    mediump float rangeCheck = 1.0 - smoothstep(0.0, depthRange, sampleDist);
 
                     occlusion += max(horizon, 0.0) * rangeCheck;
                     totalWeight += rangeCheck;
@@ -143,7 +151,7 @@
 
                 occlusion = clamp(occlusion / max(totalWeight, 0.0001) * intensity, 0.0, 1.0);
 
-                float ao = 1.0 - occlusion;
+                mediump float ao = 1.0 - occlusion;
                 // ao = pow(ao, 3.0);
                 fragColor = vec4(ao, ao, ao, 1.0);
 
