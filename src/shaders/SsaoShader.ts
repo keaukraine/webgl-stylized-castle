@@ -60,7 +60,7 @@ export class SsaoShader extends BaseShader {
             uniform mat4 view_proj_matrix;
             in vec4 rm_Vertex;
             in vec2 rm_TexCoord0;
-            out mediump vec2 vTextureCoord;
+            out vec2 vTextureCoord;
 
             void main() {
                 gl_Position = view_proj_matrix * rm_Vertex;
@@ -70,7 +70,7 @@ export class SsaoShader extends BaseShader {
         this.fragmentShaderCode = `#version 300 es
             precision highp float;
 
-            in mediump vec2 vTextureCoord;
+            in highp vec2 vTextureCoord;
             out mediump vec4 fragColor;
 
             const int SAMPLES = 10;
