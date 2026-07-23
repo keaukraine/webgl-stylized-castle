@@ -100,7 +100,7 @@ export const CAMERAS = [
     },
     {
         start: {
-            position: new Float32Array([82.28939056396484, 445.0611572265625, 93.37278747558594]),
+            position: new Float32Array([82.28939056396484, 360.0611572265625, 93.37278747558594]),
             rotation: new Float32Array([0.17400018870830536, 3.3000097274780273, 0])
         },
         end: {
