@@ -142,7 +142,7 @@ export class Renderer extends BaseRenderer {
         // higher radius require more samples to avoid noise, but allows to capture occlusion from farther away geometry.
         ssaoRadius: 18.0,
         // higher depth range causes more haloing artifacts around geometries close to each other.
-        ssaoDepthRange: 14.0,
+        ssaoDepthRange: 8.0,
         // higher bias fixes z stepping artifacts on surfaces but results in less occlusion detection and "lighter" AO output.
         ssaoBias: 0.0,
         ssaoIntensity: 1.1
